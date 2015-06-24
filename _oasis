@@ -3,7 +3,7 @@ Name:        irmin-indexeddb
 Version:     0.1
 Synopsis:    An Irmin backend for a web browser's IndexedDB store
 Authors:     Thomas Leonard
-License:     LGPL-2.1
+License:     ISC
 Plugins:     META (0.4), DevFiles (0.4)
 BuildTools:  ocamlbuild
 

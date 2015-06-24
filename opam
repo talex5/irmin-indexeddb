@@ -5,7 +5,7 @@ maintainer: "Thomas Leonard <talex5@gmail.com>"
 authors: "Thomas Leonard <talex5@gmail.com>"
 homepage: "https://github.com/talex5/irmin-indexeddb"
 bug-reports: "https://github.com/talex5/irmin-indexeddb/issues"
-license: "GNU LESSER GENERAL PUBLIC LICENSE, v2.1"
+license: "ISC"
 dev-repo: "https://github.com/talex5/irmin-indexeddb.git"
 build: [make]
 install: [make "install"]
