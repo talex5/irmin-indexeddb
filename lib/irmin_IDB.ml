@@ -26,12 +26,15 @@ module RO (K: Irmin.Hum.S) (V: Tc.S0) = struct
   type t = {
     idb_store : Iridb_lwt.store;
     task : Irmin.task;
+    config : Irmin.config;  (* Not used, but we need to provide it for some reason *)
   }
 
   let task t = t.task
 
-  let make idb_store task =
-    return (fun a -> { task = task a; idb_store })
+  let make ~config idb_store task =
+    return (fun a -> { task = task a; idb_store; config })
+
+  let config t = t.config
 
   let read t k =
     Iridb_lwt.get t.idb_store (K.to_hum k) >|= function
@@ -59,7 +62,7 @@ module AO (K: Irmin.Hash.S) (V: Tc.S0) = struct
   let create config task =
     let db_name = Irmin.Private.Conf.get config db_name_key in
     connect db_name >>= fun idb ->
-    make (Iridb_lwt.store idb ao) task
+    make ~config (Iridb_lwt.store idb ao) task
 
   let add t value =
     let k = Tc.write_cstruct (module V) value |> K.digest in
@@ -88,8 +91,10 @@ module RW (K: Irmin.Hum.S) (V: Tc.S0) = struct
     let watch = W.create () in
     let notifications = Iridb_html_storage.make () in
     connect db_name >>= fun idb ->
-    R.make (Iridb_lwt.store idb rw) task >|= fun make_r ->
+    R.make ~config (Iridb_lwt.store idb rw) task >|= fun make_r ->
     fun task -> { watch; r = make_r task; prefix; notifications; listener = None }
+
+  let config t = R.config t.r
 
   let ref_listener t =
     match t.listener with
