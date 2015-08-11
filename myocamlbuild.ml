@@ -1,5 +1,5 @@
 (* OASIS_START *)
-(* DO NOT EDIT (digest: 9ee98d6ebaf647eec3a1f274131d8acc) *)
+(* DO NOT EDIT (digest: c1805195482793a55ad5dbe42531cc15) *)
 module OASISGettext = struct
 (* # 22 "src/oasis/OASISGettext.ml" *)
 
@@ -610,7 +610,7 @@ let package_default =
      MyOCamlbuildBase.lib_ocaml = [("irmin-indexeddb", ["lib"], [])];
      lib_c = [];
      flags = [];
-     includes = []
+     includes = [("test", ["lib"])]
   }
   ;;
 

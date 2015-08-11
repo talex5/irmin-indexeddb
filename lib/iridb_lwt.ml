@@ -22,27 +22,42 @@ type db_name = string
 type db_upgrader = Iridb_js_api.database Js.t
 let store_name = Js.string
 
-let make db_name ~init =
+let get_factory () =
   let factory : Iridb_js_api.factory Js.t Js.Optdef.t = (Obj.magic Dom_html.window)##indexedDB in
-  Js.Optdef.case factory
+  Js.Optdef.get factory
     (fun () -> failwith "IndexedDB not available")
-    (fun factory ->
-      let request = factory##_open (Js.string db_name, 2) in
-      request##onupgradeneeded <- Dom.handler (fun _event ->
-        init (request##result);
-        Js._true
-      );
-      let t, set_t = Lwt.wait () in
-      request##onerror <- Dom.handler (fun _event ->
-        Lwt.wakeup_exn set_t (Failure "Error trying to connect to IndexedDB!");
-        Js._true
-      );
-      request##onsuccess <- Dom.handler (fun _event ->
-        Lwt.wakeup set_t (request##result);
-        Js._true
-      );
-      t
-    )
+
+let make db_name ~init =
+  let factory = get_factory () in
+  let request = factory##_open (Js.string db_name, 2) in
+  request##onupgradeneeded <- Dom.handler (fun _event ->
+    init (request##result);
+    Js._true
+  );
+  let t, set_t = Lwt.wait () in
+  request##onerror <- Dom.handler (fun _event ->
+    Lwt.wakeup_exn set_t (Failure "Error trying to connect to IndexedDB!");
+    Js._true
+  );
+  request##onsuccess <- Dom.handler (fun _event ->
+    Lwt.wakeup set_t (request##result);
+    Js._true
+  );
+  t
+
+let delete_database db_name =
+  let factory = get_factory () in
+  let request = factory##deleteDatabase(Js.string db_name) in
+  let t, set_t = Lwt.wait () in
+  request##onerror <- Dom.handler (fun _event ->
+    Lwt.wakeup_exn set_t (Failure "Error trying to delete IndexedDB database");
+    Js._true
+  );
+  request##onsuccess <- Dom.handler (fun _event ->
+    Lwt.wakeup set_t ();
+    Js._true
+  );
+  t
 
 let store db store_name = { db; store_name; ro_trans = None }
 

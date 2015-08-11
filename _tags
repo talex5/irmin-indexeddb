@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: b8b38626b868d9d03538fcc6448b31d5)
+# DO NOT EDIT (digest: 0eb43f77d17b053602f9ab792e7326dd)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -21,5 +21,18 @@ true: annot, bin_annot
 <lib/*.ml{,i,y}>: pkg_js_of_ocaml
 <lib/*.ml{,i,y}>: pkg_js_of_ocaml.syntax
 <lib/*.ml{,i,y}>: pkg_lwt
+# Executable test_idb
+"test/test.byte": pkg_base64
+"test/test.byte": pkg_irmin
+"test/test.byte": pkg_js_of_ocaml
+"test/test.byte": pkg_js_of_ocaml.syntax
+"test/test.byte": pkg_lwt
+"test/test.byte": use_irmin-indexeddb
+<test/*.ml{,i,y}>: pkg_base64
+<test/*.ml{,i,y}>: pkg_irmin
+<test/*.ml{,i,y}>: pkg_js_of_ocaml
+<test/*.ml{,i,y}>: pkg_js_of_ocaml.syntax
+<test/*.ml{,i,y}>: pkg_lwt
+<test/*.ml{,i,y}>: use_irmin-indexeddb
 # OASIS_STOP
-true: strict_sequence, warn(A)
+true: strict_sequence, warn(A-4)

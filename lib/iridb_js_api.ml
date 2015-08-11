@@ -75,6 +75,7 @@ end
 class type database = object
   method close : unit Js.meth
   method createObjectStore : store_name -> objectStore Js.t Js.meth
+  method deleteObjectStore : store_name -> unit Js.meth
   method onerror : ('self Js.t, request errorEvent Js.t) Dom.event_listener Js.prop
   method transaction : store_name Js.js_array Js.t -> mode -> transaction Js.t Js.meth
 end
@@ -87,4 +88,5 @@ end
 
 class type factory = object
   method _open : Js.js_string Js.t -> int -> openDBRequest Js.t Js.meth
+  method deleteDatabase : Js.js_string Js.t -> openDBRequest Js.t Js.meth
 end
