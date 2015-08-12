@@ -176,5 +176,91 @@ end
 
 let config db_name = Irmin.Private.Conf.singleton db_name_key db_name
 
-module Make (C: Irmin.Contents.S) (T: Irmin.Tag.S) (H: Irmin.Hash.S) =
-  Irmin.Make(AO)(RW)(C)(T)(H)
+module Digest (H: Irmin.Hash.S): Git.SHA.DIGEST = struct
+  (* FIXME: lots of allocations ... *)
+  let cstruct buf = Git.SHA.of_raw (Cstruct.to_string (H.to_raw (H.digest buf)))
+  let string str = cstruct (Cstruct.of_string str)
+  let length = Cstruct.len @@ H.to_raw (H.digest (Cstruct.of_string ""))
+end
+
+module Make (C: Irmin.Contents.S) (T: Irmin.Tag.S) (H: Irmin.Hash.S) = struct
+  (** We could just replace this with [Irmin.Make], but we want things in Git format so
+   * that we can sync with real Git repositories. *)
+
+  module D = Digest(H)
+  module Value_IO = Git.Value.IO(D)(Git.Inflate.None)
+
+  module GitContents = struct
+    (** Serialises Git objects (e.g. [Blob "foo"]) using the Git format (e.g. "blob 3\0foo").
+     * This means that they get the same hash that they would have got with the real Git. *)
+
+    type t = Git.Value.t
+    let equal = Git.Value.equal
+    let hash = Git.Value.hash
+    let compare = Git.Value.compare
+    let read = Value_IO.input
+    let to_string x =
+      let b = Buffer.create 1024 in
+      Value_IO.add b x;
+      Buffer.contents b
+    let write x cs =
+      let x = to_string x in
+      let l = String.length x in
+      Cstruct.blit_from_string x 0 cs 0 l;
+      Cstruct.shift cs l
+    let size_of x = to_string x |> String.length
+    let of_json _ = failwith "of_json"
+    let to_json _ = failwith "to_json"
+  end
+
+  (* AO store for Git.Value.t objects *)
+  module Git_store = struct
+    (* Slight mismatch here, because we provide an Irmin API not a Git one *)
+    module Raw = AO(H)(GitContents)
+
+    type t = Raw.t
+
+    let create config =
+      Raw.create config Irmin.Task.none >|= fun x -> x ()
+
+    let hash_of_digest d =
+      Git.SHA.to_raw d |> Cstruct.of_string |> H.of_raw
+
+    let digest_of_hash hash =
+      H.to_raw hash |> Cstruct.to_string |> Git.SHA.of_raw
+
+    let read t d =
+      Raw.read t (hash_of_digest d)
+
+    let mem t d =
+      Raw.mem t (hash_of_digest d)
+
+    let write t v =
+      Raw.add t v >|= digest_of_hash
+
+    let contents t =
+      let results = ref [] in
+      Raw.iter t (fun k v ->
+        v >>= fun v ->
+        results := (digest_of_hash k, v) :: !results;
+        return ()
+      ) >|= fun () ->
+      !results
+
+    module Digest = D
+  end
+
+  module X = Irmin_git.Irmin_value_store(Git_store)(C)(H)
+  include Irmin.Make_ext(struct
+    module Contents = Irmin.Contents.Make(X.Contents)
+    module Node = X.Node
+    module Commit = X.Commit
+    module Tag = struct
+      module Key = T
+      module Val = H
+      include RW (T)(H)
+    end
+    module Slice = Irmin.Private.Slice.Make(Contents)(Node)(Commit)
+    module Sync = Irmin.Private.Sync.None(Commit.Key)(T)
+  end)
+end
