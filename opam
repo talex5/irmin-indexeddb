@@ -16,4 +16,5 @@ depends: [
   "cstruct" {>= "1.7.0"}
   "js_of_ocaml"
   "lwt"
+  "git" {>= "1.7.0"}
 ]
