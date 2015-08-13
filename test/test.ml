@@ -12,6 +12,7 @@ let die fmt =
   Printf.ksprintf failwith fmt
 
 let db_name = "Irmin_IndexedDB_test"
+let upgrade_db_name = "Irmin_IndexedDB_t2"
 
 let start main =
   let document = Dom_html.document in
@@ -29,11 +30,29 @@ let start main =
   let expect_str = expect ~fmt:(fun () x -> String.escaped x) in
   let key_list () xs = "[" ^ (xs |> List.map I.Key.to_hum |> String.concat ",") ^ "]" in
 
+  let dump_bindings db store_name =
+    let store_id = Iridb_lwt.store_name store_name in
+    let store = Iridb_lwt.store db store_id in
+    print "let %s = [" store_name;
+    Iridb_lwt.bindings store >|= fun bindings ->
+    bindings |> List.iter (fun (name, value) ->
+      print "  %S, %S;" name value
+    );
+    print "]" in
+
+  let load_bindings db store_name bindings =
+    let store_id = Iridb_lwt.store_name store_name in
+    let store = Iridb_lwt.store db store_id in
+    bindings |> Lwt_list.iter_s (fun (name, value) ->
+      Iridb_lwt.set store name value
+    ) in
+
   Lwt.catch (fun () ->
     print "Irmin-IndexedDB test";
 
-    print "Deleting any previous test database...";
+    print "Deleting any previous test databases...";
     Iridb_lwt.delete_database db_name >>= fun () ->
+    Iridb_lwt.delete_database upgrade_db_name >>= fun () ->
 
     let config = Irmin_IDB.config db_name in
     I.create config make_task >>= fun store ->
@@ -48,8 +67,36 @@ let start main =
     print "Listing contents...";
     I.list store [] >>= expect ~fmt:key_list [key] >>= fun () ->
 
-    print "Success!";
+    I.head store >>= function
+    | None -> assert false
+    | Some head ->
+    print "Head: %s" (Irmin.Hash.SHA1.to_hum head);
+    I.update store key "value2" >>= fun () ->
+    I.history store >>= fun hist ->
+    I.History.iter_succ (fun head ->
+      print "Parent: %s" (Irmin.Hash.SHA1.to_hum head)
+    ) hist head;
 
+    print "Dumping DB contents...";
+
+    Iridb_lwt.make db_name ~init:(fun _ -> assert false) >>= fun db ->
+    dump_bindings db "ao" >>= fun () ->
+    dump_bindings db "rw" >>= fun () ->
+
+    print "Testing ability to read v1 format db";
+    let init upgrader =
+      Iridb_lwt.(create_store upgrader (store_name "ao"));
+      Iridb_lwt.(create_store upgrader (store_name "rw")) in
+    Iridb_lwt.make upgrade_db_name ~init >>= fun db ->
+    load_bindings db "ao" V1_db.ao >>= fun () ->
+    load_bindings db "rw" V1_db.rw >>= fun () ->
+
+    let config = Irmin_IDB.config upgrade_db_name in
+    I.create config make_task >>= fun store ->
+    let store = store "test" in
+    I.read_exn store key >>= expect_str "value2" >>= fun () ->
+
+    print "Success!";
     return ()
   ) (fun ex ->
     print "ERROR: %s" (Printexc.to_string ex);

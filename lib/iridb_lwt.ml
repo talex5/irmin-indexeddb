@@ -22,6 +22,29 @@ type db_name = string
 type db_upgrader = Iridb_js_api.database Js.t
 let store_name = Js.string
 
+let opt_string x ~if_missing =
+  Js.Optdef.case x
+    (fun () -> if_missing)
+    (fun x -> Js.to_string x)
+
+exception AbortError
+
+let idb_error typ (event:Iridb_js_api.request Iridb_js_api.errorEvent Js.t) =
+  let failure msg = Failure (Printf.sprintf "IndexedDB operation (%s) failed: %s" typ msg) in
+  Js.Opt.case (event##target)
+    (fun () -> failure "(missing target on error event)")
+    (fun target ->
+      Js.Opt.case (target##error)
+        (fun () -> failure "(missing error on request)")
+        (fun error ->
+          let name = opt_string (error##name) ~if_missing:"(no name)" in
+          let message = opt_string (error##message) ~if_missing:"(no message)" in
+          let code = Js.Optdef.get (error##code) (fun () -> 0) in
+          if name = "AbortError" then AbortError
+          else failure (Printf.sprintf "%s: %s (error code %d)" name message code)
+        )
+    )
+
 let get_factory () =
   let factory : Iridb_js_api.factory Js.t Js.Optdef.t = (Obj.magic Dom_html.window)##indexedDB in
   Js.Optdef.get factory
@@ -35,8 +58,8 @@ let make db_name ~init =
     Js._true
   );
   let t, set_t = Lwt.wait () in
-  request##onerror <- Dom.handler (fun _event ->
-    Lwt.wakeup_exn set_t (Failure "Error trying to connect to IndexedDB!");
+  request##onerror <- Dom.handler (fun event ->
+    Lwt.wakeup_exn set_t (idb_error "open" event);
     Js._true
   );
   request##onsuccess <- Dom.handler (fun _event ->
@@ -63,29 +86,6 @@ let store db store_name = { db; store_name; ro_trans = None }
 
 let create_store db name =
   db##createObjectStore (name) |> ignore
-
-let opt_string x ~if_missing =
-  Js.Optdef.case x
-    (fun () -> if_missing)
-    (fun x -> Js.to_string x)
-
-exception AbortError
-
-let idb_error typ (event:Iridb_js_api.request Iridb_js_api.errorEvent Js.t) =
-  let failure msg = Failure (Printf.sprintf "IndexedDB transaction (%s) failed: %s" typ msg) in
-  Js.Opt.case (event##target)
-    (fun () -> failure "(missing target on error event)")
-    (fun target ->
-      Js.Opt.case (target##error)
-        (fun () -> failure "(missing error on request)")
-        (fun error ->
-          let name = opt_string (error##name) ~if_missing:"(no name)" in
-          let message = opt_string (error##message) ~if_missing:"(no message)" in
-          let code = Js.Optdef.get (error##code) (fun () -> 0) in
-          if name = "AbortError" then AbortError
-          else failure (Printf.sprintf "%s: %s (error code %d)" name message code)
-        )
-    )
 
 let rec trans_ro (t:store) setup =
   let r, set_r = Lwt.wait () in
