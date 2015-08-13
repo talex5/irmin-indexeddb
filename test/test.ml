@@ -13,6 +13,7 @@ let die fmt =
 
 let db_name = "Irmin_IndexedDB_test"
 let upgrade_db_name = "Irmin_IndexedDB_t2"
+let import_db_name = "Irmin_IndexedDB_t3"
 
 let start main =
   let document = Dom_html.document in
@@ -53,50 +54,81 @@ let start main =
     print "Deleting any previous test databases...";
     Iridb_lwt.delete_database db_name >>= fun () ->
     Iridb_lwt.delete_database upgrade_db_name >>= fun () ->
+    Iridb_lwt.delete_database import_db_name >>= fun () ->
 
-    let config = Irmin_IDB.config db_name in
-    I.create config make_task >>= fun store ->
-    let store = store "test" in
-    print "Created basic store. Checking it is empty...";
-    I.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
+    begin
+      let config = Irmin_IDB.config db_name in
+      I.create config make_task >>= fun store ->
+      let store = store "test" in
+      print "Created basic store. Checking it is empty...";
+      I.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
 
-    I.update store key "value" >>= fun () ->
-    print "Added test item. Reading it back...";
-    I.read_exn store key >>= expect_str "value" >>= fun () ->
+      I.update store key "value" >>= fun () ->
+      print "Added test item. Reading it back...";
+      I.read_exn store key >>= expect_str "value" >>= fun () ->
 
-    print "Listing contents...";
-    I.list store [] >>= expect ~fmt:key_list [key] >>= fun () ->
+      print "Listing contents...";
+      I.list store [] >>= expect ~fmt:key_list [key] >>= fun () ->
 
-    I.head store >>= function
-    | None -> assert false
-    | Some head ->
-    print "Head: %s" (Irmin.Hash.SHA1.to_hum head);
-    I.update store key "value2" >>= fun () ->
-    I.history store >>= fun hist ->
-    I.History.iter_succ (fun head ->
-      print "Parent: %s" (Irmin.Hash.SHA1.to_hum head)
-    ) hist head;
+      I.head store >>= function
+      | None -> assert false
+      | Some head ->
+      print "Head: %s" (Irmin.Hash.SHA1.to_hum head);
+      I.update store key "value2" >>= fun () ->
+      I.history store >>= fun hist ->
+      I.History.iter_succ (fun head ->
+        print "Parent: %s" (Irmin.Hash.SHA1.to_hum head)
+      ) hist head;
 
-    print "Dumping DB contents...";
+      print "Dumping DB contents...";
 
-    Iridb_lwt.make db_name ~version:2 ~init:(fun _ -> assert false) >>= fun db ->
-    dump_bindings db "ao" >>= fun () ->
-    dump_bindings db "rw" >>= fun () ->
-    Iridb_lwt.close db;
+      Iridb_lwt.make db_name ~version:2 ~init:(fun _ -> assert false) >>= fun db ->
+      dump_bindings db "ao" >>= fun () ->
+      dump_bindings db "rw" >|= fun () ->
+      Iridb_lwt.close db
+    end >>= fun () ->
 
     print "Testing ability to read v1 format db";
-    let init upgrader =
-      Iridb_lwt.(create_store upgrader (store_name "ao"));
-      Iridb_lwt.(create_store upgrader (store_name "rw")) in
-    Iridb_lwt.make upgrade_db_name ~version:2 ~init >>= fun db ->
-    load_bindings db "ao" V1_db.ao >>= fun () ->
-    load_bindings db "rw" V1_db.rw >>= fun () ->
-    Iridb_lwt.close db;
+    begin
+      let init upgrader =
+        Iridb_lwt.(create_store upgrader (store_name "ao"));
+        Iridb_lwt.(create_store upgrader (store_name "rw")) in
+      Iridb_lwt.make upgrade_db_name ~version:2 ~init >>= fun db ->
+      load_bindings db "ao" V1_db.ao >>= fun () ->
+      load_bindings db "rw" V1_db.rw >>= fun () ->
+      Iridb_lwt.close db;
 
-    let config = Irmin_IDB.config upgrade_db_name in
-    I.create config make_task >>= fun store ->
-    let store = store "test" in
-    I.read_exn store key >>= expect_str "value2" >>= fun () ->
+      let config = Irmin_IDB.config upgrade_db_name in
+      I.create config make_task >>= fun up_store ->
+      let up_store = up_store "test" in
+      I.read_exn up_store key >>= expect_str "value2" >>= fun () ->
+
+      print "Exporting old db...";
+      I.export up_store >>= fun slice ->
+      I.head up_store >>= function
+      | None -> assert false
+      | Some head ->
+      return (slice, head)
+    end >>= fun (slice, head) ->
+
+    begin
+      let config = Irmin_IDB.config import_db_name in
+      I.create config make_task >>= fun store ->
+      let store = store "test" in
+      print "Created new store. Checking it is empty...";
+      I.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
+
+      print "Importing from bundle...";
+      I.import store slice >>= function
+      | `Error -> die "Error importing slice"
+      | `Ok ->
+
+      I.fast_forward_head store head >>= function
+      | false -> die "fast_forward_head failed"
+      | true ->
+      print "Checking import worked...";
+      I.list store [] >>= expect ~fmt:key_list [key]
+    end >>= fun () ->
 
     print "Success!";
     return ()
