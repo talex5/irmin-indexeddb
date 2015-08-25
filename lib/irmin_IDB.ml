@@ -19,6 +19,8 @@ let connect db_name =
     Iridb_lwt.create_store upgrader rw;
   )
 
+let version = 2
+
 module RO (K: Irmin.Hum.S) (V: Tc.S0) = struct
   type key = K.t
   type value = V.t
@@ -61,7 +63,7 @@ module AO (K: Irmin.Hash.S) (V: Tc.S0) = struct
 
   let create config task =
     let db_name = Irmin.Private.Conf.get config db_name_key in
-    connect db_name >>= fun idb ->
+    connect db_name ~version >>= fun idb ->
     make ~config (Iridb_lwt.store idb ao) task
 
   let add t value =
@@ -90,7 +92,7 @@ module RW (K: Irmin.Hum.S) (V: Tc.S0) = struct
     let prefix = db_name ^ ".rw." in
     let watch = W.create () in
     let notifications = Iridb_html_storage.make () in
-    connect db_name >>= fun idb ->
+    connect db_name ~version >>= fun idb ->
     R.make ~config (Iridb_lwt.store idb rw) task >|= fun make_r ->
     fun task -> { watch; r = make_r task; prefix; notifications; listener = None }
 

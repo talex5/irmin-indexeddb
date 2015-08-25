@@ -12,8 +12,8 @@ type store_name
 
 val store_name : string -> store_name
 
-val make : db_name -> init:(db_upgrader -> unit) -> db Lwt.t
-(** Connect to database [db_name]. If it doesn't yet exist, calls [init] to initialise it first. *)
+val make : db_name -> version:int -> init:(db_upgrader -> unit) -> db Lwt.t
+(** Connect to database [db_name]. If it doesn't yet exist or is for an older version, calls [init] to initialise it first. *)
 
 val delete_database : db_name -> unit Lwt.t
 

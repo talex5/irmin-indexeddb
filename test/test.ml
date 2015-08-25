@@ -79,7 +79,7 @@ let start main =
 
     print "Dumping DB contents...";
 
-    Iridb_lwt.make db_name ~init:(fun _ -> assert false) >>= fun db ->
+    Iridb_lwt.make db_name ~version:2 ~init:(fun _ -> assert false) >>= fun db ->
     dump_bindings db "ao" >>= fun () ->
     dump_bindings db "rw" >>= fun () ->
 
@@ -87,7 +87,7 @@ let start main =
     let init upgrader =
       Iridb_lwt.(create_store upgrader (store_name "ao"));
       Iridb_lwt.(create_store upgrader (store_name "rw")) in
-    Iridb_lwt.make upgrade_db_name ~init >>= fun db ->
+    Iridb_lwt.make upgrade_db_name ~version:2 ~init >>= fun db ->
     load_bindings db "ao" V1_db.ao >>= fun () ->
     load_bindings db "rw" V1_db.rw >>= fun () ->
 
