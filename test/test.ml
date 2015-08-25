@@ -82,6 +82,7 @@ let start main =
     Iridb_lwt.make db_name ~version:2 ~init:(fun _ -> assert false) >>= fun db ->
     dump_bindings db "ao" >>= fun () ->
     dump_bindings db "rw" >>= fun () ->
+    Iridb_lwt.close db;
 
     print "Testing ability to read v1 format db";
     let init upgrader =
@@ -90,6 +91,7 @@ let start main =
     Iridb_lwt.make upgrade_db_name ~version:2 ~init >>= fun db ->
     load_bindings db "ao" V1_db.ao >>= fun () ->
     load_bindings db "rw" V1_db.rw >>= fun () ->
+    Iridb_lwt.close db;
 
     let config = Irmin_IDB.config upgrade_db_name in
     I.create config make_task >>= fun store ->

@@ -15,6 +15,9 @@ val store_name : string -> store_name
 val make : db_name -> version:int -> init:(db_upgrader -> unit) -> db Lwt.t
 (** Connect to database [db_name]. If it doesn't yet exist or is for an older version, calls [init] to initialise it first. *)
 
+val close : db -> unit
+(** Begin closing the connection (returns immediately). *)
+
 val delete_database : db_name -> unit Lwt.t
 
 val create_store : db_upgrader -> store_name -> unit

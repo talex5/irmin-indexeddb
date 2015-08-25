@@ -72,6 +72,9 @@ let make db_name ~version ~init =
   );
   t
 
+let close db =
+  db##close ()
+
 let delete_database db_name =
   let factory = get_factory () in
   let request = factory##deleteDatabase(Js.string db_name) in
