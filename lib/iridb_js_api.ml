@@ -12,8 +12,11 @@ type value = Js.js_string Js.t
 type store_name = Js.js_string Js.t
 type mode = Js.js_string Js.t
 
-class type upgradeneeded = object
+class type versionChangeEvent = object
   inherit Dom_html.event
+
+  method oldVersion : int Js.readonly_prop
+  method newVersion : int Js.readonly_prop
 end
 class type ['a] errorEvent = object
   inherit ['a] Dom.event
@@ -82,7 +85,8 @@ end
 
 class type openDBRequest = object ('self)
   inherit request
-  method onupgradeneeded : ('self Js.t, upgradeneeded Js.t) Dom_html.event_listener Js.prop
+  method onupgradeneeded : ('self Js.t, versionChangeEvent Js.t) Dom_html.event_listener Js.prop
+  method onblocked : ('self Js.t, versionChangeEvent Js.t) Dom_html.event_listener Js.prop
   method result : database Js.t Js.readonly_prop
 end
 

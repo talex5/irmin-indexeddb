@@ -53,6 +53,10 @@ let get_factory () =
 let make db_name ~version ~init =
   let factory = get_factory () in
   let request = factory##_open (Js.string db_name, version) in
+  request##onblocked <- Dom.handler (fun _event ->
+    print_endline "Waiting for other IndexedDB users to close their connections before upgrading schema version.";
+    Js._true
+  );
   request##onupgradeneeded <- Dom.handler (fun _event ->
     init (request##result);
     Js._true
