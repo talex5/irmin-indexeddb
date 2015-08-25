@@ -53,17 +53,25 @@ let get_factory () =
 let make db_name ~version ~init =
   let factory = get_factory () in
   let request = factory##_open (Js.string db_name, version) in
+  let t, set_t = Lwt.wait () in
   request##onblocked <- Dom.handler (fun _event ->
     print_endline "Waiting for other IndexedDB users to close their connections before upgrading schema version.";
     Js._true
   );
   request##onupgradeneeded <- Dom.handler (fun _event ->
-    init (request##result);
-    Js._true
+    try
+      init (request##result);
+      Js._true
+    with ex ->
+      (* Firefox throws the exception away and returns AbortError instead, so save it here. *)
+      Lwt.wakeup_exn set_t ex;
+      raise ex
   );
-  let t, set_t = Lwt.wait () in
   request##onerror <- Dom.handler (fun event ->
-    Lwt.wakeup_exn set_t (idb_error "open" event);
+    begin match Lwt.state t, idb_error "open" event with
+    | Fail _, AbortError -> ()   (* Already reported a better exception *)
+    | _, ex -> Lwt.wakeup_exn set_t ex
+    end;
     Js._true
   );
   request##onsuccess <- Dom.handler (fun _event ->
