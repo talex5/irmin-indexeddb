@@ -19,7 +19,7 @@ let connect db_name =
     Iridb_lwt.create_store upgrader rw;
   )
 
-let version = 2
+let version = 3
 
 module RO (K: Irmin.Hum.S) (V: Tc.S0) = struct
   type key = K.t
