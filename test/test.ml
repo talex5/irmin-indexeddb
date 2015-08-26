@@ -84,7 +84,7 @@ let start main =
 
       print "Dumping DB contents...";
 
-      Iridb_lwt.make db_name ~version:2 ~init:(fun _ -> assert false) >>= fun db ->
+      Iridb_lwt.make db_name ~version:2 ~init:(fun ~old_version:_ _ -> assert false) >>= fun db ->
       dump_bindings db "ao" >>= fun () ->
       dump_bindings db "rw" >|= fun () ->
       Iridb_lwt.close db
@@ -92,7 +92,9 @@ let start main =
 
     print "Testing ability to read v1 format db";
     begin
-      let init upgrader =
+      print "Importing old db dump...";
+      let init ~old_version upgrader =
+        assert (old_version = 0);
         Iridb_lwt.(create_store upgrader (store_name "ao"));
         Iridb_lwt.(create_store upgrader (store_name "rw")) in
       Iridb_lwt.make upgrade_db_name ~version:2 ~init >>= fun db ->
@@ -100,6 +102,7 @@ let start main =
       load_bindings db "rw" V1_db.rw >>= fun () ->
       Iridb_lwt.close db;
 
+      print "Opening old db...";
       let config = Irmin_IDB.config upgrade_db_name in
       I.Repo.create config >>= fun up_repo ->
       I.master make_task up_repo >>= fun up_store ->
