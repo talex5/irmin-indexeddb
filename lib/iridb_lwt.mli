@@ -12,7 +12,7 @@ type store_name
 
 val store_name : string -> store_name
 
-val make : db_name -> version:int -> init:(db_upgrader -> unit) -> db Lwt.t
+val make : db_name -> version:int -> init:(old_version:int -> db_upgrader -> unit) -> db Lwt.t
 (** Connect to database [db_name]. If it doesn't yet exist or is for an older version, calls [init] to initialise it first. *)
 
 val close : db -> unit
