@@ -16,7 +16,7 @@ class type versionChangeEvent = object
   inherit Dom_html.event
 
   method oldVersion : int Js.readonly_prop
-  method newVersion : int Js.readonly_prop
+  method newVersion : int Js.readonly_prop Js.Opt.t
 end
 class type ['a] errorEvent = object
   inherit ['a] Dom.event
