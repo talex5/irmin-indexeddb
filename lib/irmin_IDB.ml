@@ -188,7 +188,7 @@ module Digest (H: Irmin.Hash.S): Git.SHA.DIGEST = struct
   let length = Cstruct.len @@ H.to_raw (H.digest (Cstruct.of_string ""))
 end
 
-module Make (C: Irmin.Contents.S) (T: Irmin.Tag.S) (H: Irmin.Hash.S) = struct
+module Make (C: Irmin.Contents.S) (R: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
   (** We could just replace this with [Irmin.Make], but we want things in Git format so
    * that we can sync with real Git repositories. *)
 
@@ -260,12 +260,12 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Tag.S) (H: Irmin.Hash.S) = struct
     module Contents = Irmin.Contents.Make(X.Contents)
     module Node = X.Node
     module Commit = X.Commit
-    module Tag = struct
-      module Key = T
+    module Ref = struct
+      module Key = R
       module Val = H
-      include RW (T)(H)
+      include RW (R)(H)
     end
     module Slice = Irmin.Private.Slice.Make(Contents)(Node)(Commit)
-    module Sync = Irmin.Private.Sync.None(Commit.Key)(T)
+    module Sync = Irmin.Private.Sync.None(Commit.Key)(R)
   end)
 end
