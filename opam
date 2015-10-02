@@ -12,7 +12,7 @@ install: [make "install"]
 remove: ["ocamlfind" "remove" "irmin-indexeddb"]
 depends: [
   "base64"
-  "irmin" {>= "0.9.5"}
+  "irmin" {>= "0.9.10"}
   "cstruct" {>= "1.7.0"}
   "js_of_ocaml"
   "lwt"
