@@ -13,6 +13,7 @@ remove: ["ocamlfind" "remove" "irmin-indexeddb"]
 depends: [
   "base64"
   "irmin" {>= "0.9.5"}
+  "cstruct" {>= "1.7.0"}
   "js_of_ocaml"
   "lwt"
 ]

@@ -1,5 +1,5 @@
 lib_and_test: build
-	js_of_ocaml +weak.js helpers.js _build/test/test.byte
+	js_of_ocaml +weak.js +cstruct/cstruct.js helpers.js _build/test/test.byte
 
 # OASIS_START
 # DO NOT EDIT (digest: a3c674b4239234cbbe53afe090018954)
