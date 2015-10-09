@@ -25,21 +25,10 @@ module RO (K: Irmin.Hum.S) (V: Tc.S0) = struct
   type key = K.t
   type value = V.t
 
-  type t = {
-    idb_store : Iridb_lwt.store;
-    task : Irmin.task;
-    config : Irmin.config;  (* Not used, but we need to provide it for some reason *)
-  }
-
-  let task t = t.task
-
-  let make ~config idb_store task =
-    return (fun a -> { task = task a; idb_store; config })
-
-  let config t = t.config
+  type t = Iridb_lwt.store
 
   let read t k =
-    Iridb_lwt.get t.idb_store (K.to_hum k) >|= function
+    Iridb_lwt.get t (K.to_hum k) >|= function
     | None -> None
     | Some s -> Some (Tc.read_string (module V) s)
 
@@ -49,33 +38,32 @@ module RO (K: Irmin.Hum.S) (V: Tc.S0) = struct
     | None -> err_not_found "read"
 
   let mem t k =
-    Iridb_lwt.get t.idb_store (K.to_hum k) >|= function
+    Iridb_lwt.get t (K.to_hum k) >|= function
     | None -> false
     | Some _ -> true
 
-  let iter { idb_store; _ } fn =
-    Iridb_lwt.bindings idb_store >>=
+  let iter t fn =
+    Iridb_lwt.bindings t >>=
     Lwt_list.iter_p (fun (k, v) -> fn (K.of_hum k) (return (Tc.read_string (module V) v)))
 end
 
 module AO (K: Irmin.Hash.S) (V: Tc.S0) = struct
   include RO(K)(V)
 
-  let create config task =
+  let create config =
     let db_name = Irmin.Private.Conf.get config db_name_key in
     connect db_name ~version >>= fun idb ->
-    make ~config (Iridb_lwt.store idb ao) task
+    return (Iridb_lwt.store idb ao)
 
   let add t value =
     let k = Tc.write_cstruct (module V) value |> K.digest in
     let v = Tc.write_string (module V) value in
-    Iridb_lwt.set t.idb_store (K.to_hum k) v >|= fun () -> k
+    Iridb_lwt.set t (K.to_hum k) v >|= fun () -> k
 end
 
 module RW (K: Irmin.Hum.S) (V: Tc.S0) = struct
   module W = Irmin.Private.Watch.Make(K)(V)
   module R = RO(K)(V)
-  open R
 
   type watch = W.watch
 
@@ -87,16 +75,14 @@ module RW (K: Irmin.Hum.S) (V: Tc.S0) = struct
     mutable listener : (Dom.event_listener_id * int) option;
   }
 
-  let create config task =
+  let create config =
     let db_name = Irmin.Private.Conf.get config db_name_key in
     let prefix = db_name ^ ".rw." in
     let watch = W.create () in
     let notifications = Iridb_html_storage.make () in
     connect db_name ~version >>= fun idb ->
-    R.make ~config (Iridb_lwt.store idb rw) task >|= fun make_r ->
-    fun task -> { watch; r = make_r task; prefix; notifications; listener = None }
-
-  let config t = R.config t.r
+    let r = Iridb_lwt.store idb rw in
+    return { watch; r; prefix; notifications; listener = None }
 
   let ref_listener t =
     match t.listener with
@@ -134,12 +120,12 @@ module RW (K: Irmin.Hum.S) (V: Tc.S0) = struct
   let update t k value =
     (* Log.warn "Non-atomic update called!"; *)
     Tc.write_string (module V) value
-    |> Iridb_lwt.set t.r.idb_store (K.to_hum k) >>= fun () ->
+    |> Iridb_lwt.set t.r (K.to_hum k) >>= fun () ->
     notify t k (Some value)
 
   let remove t k =
     (* Log.warn "Non-atomic remove called!"; *)
-    Iridb_lwt.remove t.r.idb_store (K.to_hum k) >>= fun () ->
+    Iridb_lwt.remove t.r (K.to_hum k) >>= fun () ->
     notify t k None
 
   let compare_and_set t k ~test ~set =
@@ -149,7 +135,7 @@ module RW (K: Irmin.Hum.S) (V: Tc.S0) = struct
       | Some old, Some expected -> Tc.read_string (module V) old |> V.equal expected
       | _ -> false in
     let new_value = set >|?= Tc.write_string (module V) in
-    Iridb_lwt.compare_and_set t.r.idb_store (K.to_hum k) ~test:pred ~new_value >>= function
+    Iridb_lwt.compare_and_set t.r (K.to_hum k) ~test:pred ~new_value >>= function
     | true -> notify t k set >|= fun () -> true
     | false -> return false
 
@@ -169,12 +155,11 @@ module RW (K: Irmin.Hum.S) (V: Tc.S0) = struct
   let mem t = R.mem t.r
   let read t = R.read t.r
   let read_exn t = R.read_exn t.r
-  let task t = R.task t.r
   type value = R.value
   type key = R.key
 end
 
 let config db_name = Irmin.Private.Conf.singleton db_name_key db_name
 
-module Make (C: Irmin.Contents.S) (T: Irmin.Tag.S) (H: Irmin.Hash.S) =
+module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) =
   Irmin.Make(AO)(RW)(C)(T)(H)

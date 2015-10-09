@@ -1,6 +1,6 @@
 open Lwt
 
-module I = Irmin.Basic(Irmin_IDB.Make)(Irmin.Contents.String)
+module I = Irmin_IDB.Make(Irmin.Contents.String)(Irmin.Ref.String)(Irmin.Hash.SHA1)
 
 let key = ["key"]
 
@@ -58,7 +58,7 @@ let start main =
 
     begin
       let config = Irmin_IDB.config db_name in
-      I.create config make_task >>= fun store ->
+      I.Repo.create config >>= I.master make_task >>= fun store ->
       let store = store "test" in
       print "Created basic store. Checking it is empty...";
       I.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
@@ -99,12 +99,13 @@ let start main =
       Iridb_lwt.close db;
 
       let config = Irmin_IDB.config upgrade_db_name in
-      I.create config make_task >>= fun up_store ->
+      I.Repo.create config >>= fun up_repo ->
+      I.master make_task up_repo >>= fun up_store ->
       let up_store = up_store "test" in
       I.read_exn up_store key >>= expect_str "value2" >>= fun () ->
 
       print "Exporting old db...";
-      I.export up_store >>= fun slice ->
+      I.Repo.export up_repo >>= fun slice ->
       I.head up_store >>= function
       | None -> assert false
       | Some head ->
@@ -113,13 +114,14 @@ let start main =
 
     begin
       let config = Irmin_IDB.config import_db_name in
-      I.create config make_task >>= fun store ->
+      I.Repo.create config >>= fun repo ->
+      I.master make_task repo >>= fun store ->
       let store = store "test" in
       print "Created new store. Checking it is empty...";
       I.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
 
       print "Importing from bundle...";
-      I.import store slice >>= function
+      I.Repo.import repo slice >>= function
       | `Error -> die "Error importing slice"
       | `Ok ->
 
