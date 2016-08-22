@@ -44,7 +44,9 @@ module RO (K: Irmin.Hum.S) (V: Tc.S0) = struct
 
   let iter t fn =
     Iridb_lwt.bindings t >>=
-    Lwt_list.iter_p (fun (k, v) -> fn (K.of_hum k) (return (Tc.read_string (module V) v)))
+    Lwt_list.iter_p (fun (k, v) ->
+        fn (K.of_hum k) (fun () -> return (Tc.read_string (module V) v))
+      )
 end
 
 module AO (K: Irmin.Hash.S) (V: Tc.S0) = struct
