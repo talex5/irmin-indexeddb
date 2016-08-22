@@ -1,0 +1,3 @@
+PKG lwt irmin js_of_ocaml js_of_ocaml.syntax base64
+S lib/
+B _build/lib/
