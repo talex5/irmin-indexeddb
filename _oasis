@@ -12,7 +12,7 @@ Library "irmin-indexeddb"
   FindlibName: 	irmin-indexeddb
   InternalModules: Iridb_js_api, Iridb_lwt, Iridb_html_storage, Iridb_utils
   Modules: 	Irmin_IDB
-  BuildDepends: lwt,irmin,js_of_ocaml, js_of_ocaml.syntax, base64
+  BuildDepends: lwt,irmin,js_of_ocaml, js_of_ocaml.ppx, base64
 
 Executable test_idb
   Path:		test
