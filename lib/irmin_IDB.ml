@@ -163,5 +163,154 @@ end
 
 let config db_name = Irmin.Private.Conf.singleton db_name_key db_name
 
-module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) =
+module Make_v0_11 (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) =
   Irmin.Make(AO)(RW)(C)(T)(H)
+
+module Make_v0_10
+    (C: Irmin.Contents.S)
+    (R: Irmin.Ref.S)
+    (H: Irmin.Hash.S) =
+struct
+  (* Irmin 0.11's own [Metadata.None] writes a single zero byte, which changed the binary format.
+     This one is compatible with Irmin 0.10. *)
+  module No_metadata = struct
+    include Tc.Bin_prot0(struct
+      type t = unit
+      let compare _ _ = 0
+      let to_json = Ezjsonm.unit
+      let of_json = Ezjsonm.get_unit
+      let bin_size_t () = 0
+      let bin_write_t _b ~pos () = pos
+      let bin_read_t _b ~pos_ref:_ = ()
+    end)
+
+    let to_hum () = "unit"
+    let of_hum = function "unit" -> () | _ -> failwith "Unit.of_hum"
+    let default = ()
+    let merge ~old:_ () () = Lwt.return (`Ok ())
+  end
+
+  (* This is the same as the Irmin 0.11 version, except that it uses an option for the root node. *)
+  module Make_commit (C: Tc.S0) (Node: Irmin.Private.Node.STORE) = struct
+    module N = Node.Key
+    module T = Irmin.Task
+    type node = N.t
+    type commit = C.t
+
+    type t = {
+      node   : N.t;
+      parents: C.t list;
+      task : T.t;
+    }
+
+    let parents t = t.parents
+    let node t = t.node
+    let task t = t.task
+    let create task ~node ~parents = { node; parents; task }
+
+    let to_json t =
+      `O [
+        ("node"   , N.to_json t.node);
+        ("parents", Ezjsonm.list C.to_json t.parents);
+        ("task"   , T.to_json t.task);
+      ]
+
+    let of_json j =
+      let node    = Ezjsonm.find j ["node"]    |> N.of_json in
+      let parents = Ezjsonm.find j ["parents"] |> Ezjsonm.get_list C.of_json in
+      let task    = Ezjsonm.find j ["task"]    |> T.of_json in
+      { node; parents; task }
+
+    module X = Tc.Triple(Tc.Option(N))(Tc.List(C))(T)
+
+    let empty_hash =
+      let len = Node.Val.(size_of empty) in
+      let buf = Cstruct.create len in
+      let rest = Node.Val.(write empty) buf in
+      assert (Cstruct.len rest = 0);
+      Node.Key.digest buf
+
+    let explode t =
+      let node =
+        if Node.Key.equal t.node empty_hash then None
+        else Some t.node
+      in
+      node, t.parents, t.task
+
+    let implode (node, parents, task) =
+      let node =
+        match node with
+        | None -> empty_hash
+        | Some n -> n
+      in
+      { node; parents; task }
+
+    let x = Tc.biject (module X) implode explode
+
+    let hash = Tc.hash x
+    let compare = Tc.compare x
+    let equal = Tc.equal x
+
+    let size_of = Tc.size_of x
+    let write = Tc.write x
+    let read = Tc.read x
+
+  end
+
+  module X = struct
+    module XContents = struct
+      include AO(H)(C)
+      module Key = H
+      module Val = C
+    end
+    module Contents = Irmin.Contents.Store(XContents)
+    module Node = struct
+      module AO = struct
+        module Key = H
+        module Val = Irmin.Private.Node.Make (H)(H)(C.Path)(No_metadata)
+        include AO (Key)(Val)
+      end
+      include Irmin.Private.Node.Store(Contents)(AO)
+      let create = AO.create
+    end
+    module Commit = struct
+      module AO = struct
+        module Key = H
+        module Val = Make_commit (H)(Node)
+        include AO (Key)(Val)
+      end
+      include Irmin.Private.Commit.Store(Node)(AO)
+      let create = AO.create
+    end
+    module Ref = struct
+      module Key = R
+      module Val = H
+      include RW (Key)(Val)
+    end
+    module Slice = Irmin.Private.Slice.Make(Contents)(Node)(Commit)
+    module Sync = Irmin.Private.Sync.None(H)(R)
+    module Repo = struct
+      type t = {
+        config: Irmin.Private.Conf.t;
+        contents: Contents.t;
+        node: Node.t;
+        commit: Commit.t;
+        ref_store: Ref.t;
+      }
+      let ref_t t = t.ref_store
+      let commit_t t = t.commit
+      let node_t t = t.node
+      let contents_t (t:t) = t.contents
+
+      let create config =
+        XContents.create config >>= fun contents ->
+        Node.create config      >>= fun node ->
+        Commit.create config    >>= fun commit ->
+        Ref.create config       >>= fun ref_store ->
+        let node = contents, node in
+        let commit = node, commit in
+        return { contents; node; commit; ref_store; config }
+    end
+  end
+  include Irmin.Make_ext(X)
+end
