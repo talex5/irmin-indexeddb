@@ -17,7 +17,7 @@ type t = Dom_html.storage Js.t
 type key = string
 
 let make () =
-  Js.Optdef.get (Dom_html.window##localStorage)
+  Js.Optdef.get Dom_html.window##.localStorage
     (fun () -> failwith "HTML 5 storage is not available")
 
 let get t key =
@@ -27,23 +27,23 @@ let get t key =
 
 let set t key value =
   let encoded = UTF8_codec.encode value |> Js.string in
-  t##setItem (Js.string key, encoded)
+  t##setItem (Js.string key) encoded
 
 let remove t key =
   t##removeItem (Js.string key)
 
 let event = Dom.Event.make "storage"
 
-let key (ev:#storageEvent Js.t) = ev##key
+let key (ev:#storageEvent Js.t) = ev##.key
 
 let watch t ~prefix fn =
   let on_change (ev : storageEvent Js.t) =
-    if ev##storageArea = Js.Opt.return t then (
+    if ev##.storageArea = Js.Opt.return t then (
       let k = key ev in
-      if k##lastIndexOf_from (Js.string prefix, 0) = 0 then (
+      if k##lastIndexOf_from (Js.string prefix) 0 = 0 then (
         let k = Js.to_string k in
         let v =
-          Js.Opt.case (ev##newValue)
+          Js.Opt.case ev##.newValue
             (fun () -> None)
             (fun v ->
               Some (Js.to_string v |> UTF8_codec.decode)) in

@@ -1,25 +1,6 @@
 language: c
-install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/master/.travis-opam.sh
+sudo: required
+install: wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-opam.sh
 script: bash -ex .travis-opam.sh
-sudo: false
-addons:
-  apt:
-    sources:
-    - avsm
-    packages:
-    - ocaml
-    - ocaml-base
-    - ocaml-native-compilers
-    - ocaml-compiler-libs
-    - ocaml-interp
-    - ocaml-base-nox
-    - ocaml-nox
-    - camlp4
-    - camlp4-extra
-    - libgmp-dev
-    - libssl-dev
-    - time
-    - libcurl3
-    - curl
 env:
-  - FORK_USER=talex5 FORK_BRANCH=containers TESTS=true OCAML_VERSION=4.02
+  - OCAML_VERSION=4.04 PINS="bin_prot.114.06+90:https://github.com/talex5/bin_prot.git#cuekeeper"
