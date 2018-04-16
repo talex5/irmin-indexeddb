@@ -1,0 +1,8 @@
+(jbuild_version 1)
+
+(library
+ ((name        Irmin_IDB)
+  (public_name irmin-indexeddb)
+  (wrapped     false)
+  (libraries   (irmin js_of_ocaml-lwt uutf base64))
+  (preprocess  (pps (js_of_ocaml-ppx)))))

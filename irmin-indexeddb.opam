@@ -1,19 +1,22 @@
 opam-version: "1.2"
-name: "irmin-indexeddb"
-version: "dev"
 maintainer: "Thomas Leonard <talex5@gmail.com>"
 authors: "Thomas Leonard <talex5@gmail.com>"
 homepage: "https://github.com/talex5/irmin-indexeddb"
 bug-reports: "https://github.com/talex5/irmin-indexeddb/issues"
 license: "ISC"
 dev-repo: "https://github.com/talex5/irmin-indexeddb.git"
-build: [make]
-install: [make "install"]
-remove: ["ocamlfind" "remove" "irmin-indexeddb"]
+
+build: [
+ ["jbuilder" "subst"] {pinned}
+ ["jbuilder" "build" "-p" name "-j" jobs]
+]
+
 depends: [
   "base64"
-  "irmin" {>= "0.11.0" & < "1.0"}
+  "irmin" {>= "1.0"}
   "cstruct" {>= "1.7.0"}
-  "js_of_ocaml" {>= "2.6" & < "3.0"}
+  "js_of_ocaml-lwt" {>="3.0"}
+  "js_of_ocaml-ppx" {build & >= "3.0"}
   "lwt"
+  "mirage-tc" {test}
 ]

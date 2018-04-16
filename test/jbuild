@@ -1,0 +1,11 @@
+(jbuild_version 1)
+
+(executable
+ ((name        test)
+  (js_of_ocaml ((flags (+weak.js +cstruct/cstruct.js))))
+  (libraries   (irmin-indexeddb irmin_compat))
+  (preprocess  (pps (js_of_ocaml-ppx)))))
+
+(alias
+ ((name runtest)
+  (deps (test.bc.js))))

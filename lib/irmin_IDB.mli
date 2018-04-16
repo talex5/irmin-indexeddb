@@ -9,8 +9,8 @@ val config : string -> Irmin.config
 module AO: Irmin.AO_MAKER
 module RW: Irmin.RW_MAKER
 
-module Make_v0_10: Irmin.S_MAKER
-(** Make a store using the Irmin 0.10 binary format *)
+module Make: Irmin.S_MAKER
+(** Make a full store using the Irmin 1.0 binary format *)
 
-module Make_v0_11: Irmin.S_MAKER
-(** Make a store using the Irmin 0.11 binary format *)
+module KV: Irmin.KV_MAKER
+(** Make a KV store using the Irmin 1.0 binary format *)

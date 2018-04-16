@@ -1,4 +1,5 @@
-setup.data
-setup.log
 _build
-test.byte
+_opam
+*.install
+.merlin
+*~
