@@ -1,4 +1,5 @@
 open Lwt
+open Js_of_ocaml
 
 module I = Irmin_IDB.Make(Irmin.Contents.String)(Irmin.Ref.String)(Irmin.Hash.SHA1)
 

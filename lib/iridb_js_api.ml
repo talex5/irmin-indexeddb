@@ -5,6 +5,8 @@
  * Currently only covers the bits needed for CueKeeper.
  * IndexedDB_lwt provides a more friendly API. *)
 
+open Js_of_ocaml
+
 (* Note: we currently assume all keys and values are strings.
  * This will always be the case for entries added using this interface. *)
 type key = Js.js_string Js.t

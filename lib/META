@@ -1,8 +1,8 @@
 # OASIS_START
-# DO NOT EDIT (digest: 98d5c54f71a8e6b55e6bf15a2f46dbc0)
+# DO NOT EDIT (digest: 63f0e653d34d7a912bf836954c81efa1)
 version = "0.1"
 description = "An Irmin backend for a web browser's IndexedDB store"
-requires = "lwt irmin js_of_ocaml js_of_ocaml.ppx base64"
+requires = "lwt irmin js_of_ocaml js_of_ocaml-ppx js_of_ocaml-lwt base64"
 archive(byte) = "irmin-indexeddb.cma"
 archive(byte, plugin) = "irmin-indexeddb.cma"
 archive(native) = "irmin-indexeddb.cmxa"

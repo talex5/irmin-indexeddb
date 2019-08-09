@@ -2,6 +2,7 @@
  * See the README file for details. *)
 
 open Iridb_utils
+open Js_of_ocaml
 
 class type storageEvent =
   object

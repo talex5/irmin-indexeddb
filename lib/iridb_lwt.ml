@@ -3,6 +3,7 @@
 
 open Lwt
 open Iridb_utils
+open Js_of_ocaml
 
 type db = Iridb_js_api.database Js.t
 type store_name = Js.js_string Js.t
