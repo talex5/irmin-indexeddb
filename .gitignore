@@ -1,4 +1,2 @@
-setup.data
-setup.log
 _build
-test.byte
+.merlin

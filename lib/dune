@@ -1,0 +1,6 @@
+(library
+ (public_name irmin-indexeddb)
+ (name irmin_indexeddb)
+ (wrapped false)
+ (preprocess (pps js_of_ocaml-ppx))
+ (libraries lwt irmin js_of_ocaml js_of_ocaml-lwt base64))

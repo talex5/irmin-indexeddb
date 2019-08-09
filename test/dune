@@ -1,0 +1,5 @@
+(executable
+ (name test)
+ (modes byte)
+ (preprocess (pps js_of_ocaml-ppx))
+ (libraries irmin_indexeddb))
