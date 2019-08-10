@@ -1,5 +1,6 @@
 open Lwt
 open Js_of_ocaml
+module Lwt_js_events = Js_of_ocaml_lwt.Lwt_js_events
 
 module I = Irmin_IDB.Make(Irmin.Contents.String)(Irmin.Ref.String)(Irmin.Hash.SHA1)
 
