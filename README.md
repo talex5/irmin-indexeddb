@@ -9,9 +9,11 @@ This is an Irmin backend that stores the data in the web-browser's IndexedDB sto
 Instructions
 ------------
 
-You'll need a version of `bin_prot` that works with `js_of_ocaml` and doesn't depend on `Base`:
+You'll need a version of `bin_prot` that works with `js_of_ocaml` and doesn't depend on `Base`,
+and a version of Irmin that doesn't depend on cohttp:
 
-    opam pin add bin_prot.114.06+90 'https://github.com/talex5/bin_prot.git#cuekeeper'
+    opam pin add -yn bin_prot.114.06+90 'https://github.com/talex5/bin_prot.git#cuekeeper'
+    opam pin add -yn irmin.0.10.1 https://github.com/talex5/irmin.git#cuekeeper
 
 To create an Irmin store, use e.g.
 
