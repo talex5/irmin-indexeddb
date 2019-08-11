@@ -1,6 +1,8 @@
 (* Copyright (C) 2015, Thomas Leonard
  * See the README file for details. *)
 
+open Js_of_ocaml
+
 type t
 type key = string
 

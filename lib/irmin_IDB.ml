@@ -3,6 +3,7 @@
 
 open Lwt
 open Iridb_utils
+open Js_of_ocaml
 
 let err_not_found n =
   Lwt.fail (Invalid_argument (Printf.sprintf "IndexedDB.%s: not found" n))
