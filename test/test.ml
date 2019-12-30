@@ -76,7 +76,7 @@ let start main =
       | None -> assert false
       | Some head ->
       print "Head: %s" (Irmin.Hash.SHA1.to_hum head);
-      I.update store key "value2" >>= fun () ->
+      I.update store key "value3" >>= fun () ->
       I.history store >>= fun hist ->
       I.History.iter_succ (fun head ->
         print "Parent: %s" (Irmin.Hash.SHA1.to_hum head)
@@ -84,9 +84,9 @@ let start main =
 
       print "Dumping DB contents...";
 
-      Iridb_lwt.make db_name ~version:2 ~init:(fun ~old_version:_ _ -> assert false) >>= fun db ->
-      dump_bindings db "ao" >>= fun () ->
-      dump_bindings db "rw" >|= fun () ->
+      Iridb_lwt.make db_name ~version:3 ~init:(fun ~old_version:_ _ -> assert false) >>= fun db ->
+      dump_bindings db "ao_git" >>= fun () ->
+      dump_bindings db "rw_git" >|= fun () ->
       Iridb_lwt.close db
     end >>= fun () ->
 
@@ -116,6 +116,14 @@ let start main =
       | Some head ->
       return (slice, head)
     end >>= fun (slice, head) ->
+
+    begin
+      Iridb_lwt.make upgrade_db_name ~version:3 ~init:(fun ~old_version:_ _ -> assert false) >>= fun db ->
+      dump_bindings db "ao" >>= fun () ->
+      dump_bindings db "ao_git" >>= fun () ->
+      dump_bindings db "rw" >>= fun () ->
+      dump_bindings db "rw_git"
+    end >>= fun () ->
 
     begin
       let config = Irmin_IDB.config import_db_name in

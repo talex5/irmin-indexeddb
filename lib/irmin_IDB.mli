@@ -7,5 +7,8 @@
 val config : string -> Irmin.config
 
 module AO: Irmin.AO_MAKER
-module RW: Irmin.RW_MAKER
+module RW (K: Irmin.Hum.S) (V: Irmin.Hash.S): sig
+  include Irmin.RRW with type key = K.t and type value = V.t
+  val create: Irmin.config -> t Lwt.t
+end
 module Make: Irmin.S_MAKER
