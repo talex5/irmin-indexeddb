@@ -357,18 +357,32 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
   module Repo = struct
     include X.Repo
 
-    let migrate_content t ~old c =
-      Old.Private.Contents.read_exn (Old.Private.Repo.contents_t old) c >>=
-      Private.Contents.add (Private.Repo.contents_t t)
+    module CommitHash = Hashtbl.Make(Old.Private.Commit.Key)
+    module TreeHash = Hashtbl.Make(Old.Private.Node.Key)
+    module ContentsHash = Hashtbl.Make(Old.Private.Contents.Key)
 
-    let rec migrate_tree t ~old tree =
-      Old.Private.Node.read_exn (Old.Private.Repo.node_t old) tree >>= fun tree ->
-      Old.Private.Node.Val.alist tree |> Lwt_list.map_s (function
-          | s, `Contents c -> migrate_content t ~old c >|= fun c -> s, `Contents c
-          | s, `Node dir -> migrate_tree t ~old dir >|= fun dir -> s, `Node dir
-        ) >>= fun alist ->
-      let tree = Private.Node.Val.create alist in
-      Private.Node.add (Private.Repo.node_t t) tree
+    let migrate_content t ~old ~replacements old_id =
+      match ContentsHash.find_opt replacements old_id with
+      | Some r -> Lwt.return r
+      | None ->
+        Old.Private.Contents.read_exn (Old.Private.Repo.contents_t old) old_id >>=
+        Private.Contents.add (Private.Repo.contents_t t) >|= fun new_id ->
+        ContentsHash.add replacements old_id new_id;
+        new_id
+
+    let rec migrate_tree t ~old ~replacements ~contents_replacements old_id =
+      match TreeHash.find_opt replacements old_id with
+      | Some r -> Lwt.return r
+      | None ->
+        Old.Private.Node.read_exn (Old.Private.Repo.node_t old) old_id >>= fun tree ->
+        Old.Private.Node.Val.alist tree |> Lwt_list.map_s (function
+            | s, `Contents c -> migrate_content t ~old ~replacements:contents_replacements c >|= fun c -> s, `Contents c
+            | s, `Node dir -> migrate_tree t ~old ~replacements ~contents_replacements dir >|= fun dir -> s, `Node dir
+          ) >>= fun alist ->
+        let tree = Private.Node.Val.create alist in
+        Private.Node.add (Private.Repo.node_t t) tree >|= fun new_id ->
+        TreeHash.add replacements old_id new_id;
+        new_id
 
     let lwt_opt_map f = function
       | None -> Lwt.return_none
@@ -394,7 +408,9 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
           Old.history old_master >>= fun history ->
           let commits = Topo.fold (fun n acc -> n :: acc) history [] |> List.rev in
           let n_commits = List.length commits in
-          let replacements = Hashtbl.create n_commits in
+          let replacements = CommitHash.create n_commits in
+          let tree_replacements = TreeHash.create 1024 in
+          let contents_replacements = ContentsHash.create 1024 in
           let old_commits = Old.Private.Repo.commit_t old in
           let new_commits = Private.Repo.commit_t t in
           let i = ref 0 in
@@ -403,15 +419,15 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
               incr i;
               Old.Private.Commit.read_exn old_commits c >>= fun cv ->
               let tree = Old.Private.Commit.Val.node cv in
-              let parents = Old.Private.Commit.Val.parents cv |> List.map (Hashtbl.find replacements) in
+              let parents = Old.Private.Commit.Val.parents cv |> List.map (CommitHash.find replacements) in
               let task = Old.Private.Commit.Val.task cv in
-              lwt_opt_map (migrate_tree t ~old) tree >>= fun tree ->
+              lwt_opt_map (migrate_tree t ~old ~replacements:tree_replacements ~contents_replacements) tree >>= fun tree ->
               let nc = Private.Commit.Val.create task ?node:tree ~parents in
               Private.Commit.add new_commits nc >>= fun new_id ->
-              Hashtbl.add replacements c new_id;
+              CommitHash.add replacements c new_id;
               Lwt.return_unit
             ) >>= fun () ->
-          let new_head = Hashtbl.find replacements old_head in
+          let new_head = CommitHash.find replacements old_head in
           log "All commits migrated.";
           Private.Ref.compare_and_set (Private.Repo.ref_t t) ~test:None T.master ~set:(Some new_head) >>= fun ok ->
           if not ok then failwith "Failed to set new head in DB migration!";
