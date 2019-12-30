@@ -374,7 +374,7 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
       | None -> Lwt.return_none
       | Some x -> f x >|= fun y -> Some y
 
-    let create config =
+    let create_full ~log config =
       create config >>= fun t ->
       (* Upgrade to Git format, if needed *)
       master Irmin.Task.none t >>= fun master ->
@@ -390,6 +390,7 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
         | None -> Lwt.return t          (* New deployment *)
         | Some old_head ->
           (* Migration needed *)
+          log "Migration to new Git database format needed. Counting commits...";
           Old.history old_master >>= fun history ->
           let commits = Topo.fold (fun n acc -> n :: acc) history [] |> List.rev in
           let n_commits = List.length commits in
@@ -398,7 +399,7 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
           let new_commits = Private.Repo.commit_t t in
           let i = ref 0 in
           commits |> Lwt_list.iter_s (fun c ->
-              if !i mod 100 = 0 then Printf.printf "Migrating commit %d/%d\n%!" !i n_commits;
+              if !i mod 100 = 0 then log @@ Printf.sprintf "Migrating commit %d/%d" !i n_commits;
               incr i;
               Old.Private.Commit.read_exn old_commits c >>= fun cv ->
               let tree = Old.Private.Commit.Val.node cv in
@@ -411,9 +412,13 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
               Lwt.return_unit
             ) >>= fun () ->
           let new_head = Hashtbl.find replacements old_head in
-          print_endline "All commits migrated.";
+          log "All commits migrated.";
           Private.Ref.compare_and_set (Private.Repo.ref_t t) ~test:None T.master ~set:(Some new_head) >>= fun ok ->
           if not ok then failwith "Failed to set new head in DB migration!";
           Lwt.return t
+
+    let create = create_full ~log:print_endline
   end
+
+  let create_full = Repo.create_full
 end

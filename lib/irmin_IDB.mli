@@ -11,4 +11,16 @@ module RW (K: Irmin.Hum.S) (V: Irmin.Hash.S): sig
   include Irmin.RRW with type key = K.t and type value = V.t
   val create: Irmin.config -> t Lwt.t
 end
-module Make: Irmin.S_MAKER
+module Make (C: Irmin.Contents.S) (R: Irmin.Ref.S) (H: Irmin.Hash.S) : sig
+  include Irmin.S
+    with type key = C.Path.t
+     and module Key = C.Path
+     and type value = C.t
+     and type branch_id = R.t
+     and type commit_id = H.t
+
+  val create_full: log:(string -> unit) -> Irmin.config -> Repo.t Lwt.t
+  (** [create_full ~log config] is like [Repo.create] but if a database
+      migration is required, it writes progress messages to [log] rather than
+      to the console. *)
+end

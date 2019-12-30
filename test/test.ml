@@ -104,7 +104,7 @@ let start main =
 
       print "Opening old db...";
       let config = Irmin_IDB.config upgrade_db_name in
-      I.Repo.create config >>= fun up_repo ->
+      I.create_full ~log:(print "%s") config >>= fun up_repo ->
       I.master make_task up_repo >>= fun up_store ->
       let up_store = up_store "test" in
       I.read_exn up_store key >>= expect_str "value2" >>= fun () ->
