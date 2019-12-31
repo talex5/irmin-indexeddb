@@ -2,16 +2,16 @@ open Lwt
 open Js_of_ocaml
 module Lwt_js_events = Js_of_ocaml_lwt.Lwt_js_events
 
-module I = Irmin_IDB.Make(Irmin.Contents.String)(Irmin.Ref.String)(Irmin.Hash.SHA1)
+module I = Irmin_IDB.Make(Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)
 
 let key = ["key"]
 
 let make_task s =
   let date = Unix.time () |> Int64.of_float in
-  Irmin.Task.create ~date ~owner:"User" s
+  Irmin.Info.v ~date ~author:"User" s
 
 let die fmt =
-  Printf.ksprintf failwith fmt
+  Fmt.kstrf failwith fmt
 
 let db_name = "Irmin_IndexedDB_test"
 let upgrade_db_name = "Irmin_IndexedDB_t2"
@@ -23,15 +23,18 @@ let start main =
     let add msg =
       let node = document##createTextNode (Js.string (msg ^ "\n")) in
       Dom.appendChild main node |> ignore in
-    Printf.ksprintf add fmt in
+    Fmt.kstr add fmt in
 
   let expect ~fmt expected actual =
     if expected = actual then print "Got %a, as expected" fmt expected
     else die "Got %a, but expected %a!" fmt actual fmt expected;
     return () in
 
-  let expect_str = expect ~fmt:(fun () x -> String.escaped x) in
-  let key_list () xs = "[" ^ (xs |> List.map I.Key.to_hum |> String.concat ",") ^ "]" in
+  let expect_str = expect ~fmt:Fmt.(quote string) in
+  let key_list f xs =
+    let pp_item f (step, _) = Fmt.string f step in
+    Fmt.pf f "[%a]"
+      (Fmt.(list ~sep:(unit ",")) pp_item) xs in
 
   let dump_bindings db store_name =
     let store_id = Iridb_lwt.store_name store_name in
@@ -60,26 +63,25 @@ let start main =
 
     begin
       let config = Irmin_IDB.config db_name in
-      I.Repo.create config >>= I.master make_task >>= fun store ->
-      let store = store "test" in
+      I.Repo.v config >>= I.master >>= fun store ->
       print "Created basic store. Checking it is empty...";
       I.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
-
-      I.update store key "value" >>= fun () ->
+      let info = Irmin.Info.none in
+      I.set ~info store key "value" >>= fun () ->
       print "Added test item. Reading it back...";
-      I.read_exn store key >>= expect_str "value" >>= fun () ->
+      I.get store key >>= expect_str "value" >>= fun () ->
 
       print "Listing contents...";
-      I.list store [] >>= expect ~fmt:key_list [key] >>= fun () ->
+      I.list store [] >>= expect ~fmt:key_list ["key", `Contents] >>= fun () ->
 
-      I.head store >>= function
+      I.Head.find store >>= function
       | None -> assert false
       | Some head ->
-      print "Head: %s" (Irmin.Hash.SHA1.to_hum head);
-      I.update store key "value3" >>= fun () ->
+      print "Head: %a" I.Commit.pp head;
+      I.set ~info store key "value3" >>= fun () ->
       I.history store >>= fun hist ->
       I.History.iter_succ (fun head ->
-        print "Parent: %s" (Irmin.Hash.SHA1.to_hum head)
+        print "Parent: %a" I.Commit.pp head
       ) hist head;
 
       print "Dumping DB contents...";
@@ -108,14 +110,13 @@ let start main =
 
       print "Opening old db...";
       let config = Irmin_IDB.config upgrade_db_name in
-      I.Repo.create config >>= fun up_repo ->
-      I.master make_task up_repo >>= fun up_store ->
-      let up_store = up_store "test" in
-      I.read_exn up_store key >>= expect_str "value2" >>= fun () ->
+      I.Repo.v config >>= fun up_repo ->
+      I.master up_repo >>= fun up_store ->
+      I.get up_store key >>= expect_str "value2" >>= fun () ->
 
       print "Exporting old db...";
       I.Repo.export up_repo >>= fun slice ->
-      I.head up_store >>= function
+      I.Head.find up_store >>= function
       | None -> assert false
       | Some head ->
       return (slice, head)
@@ -129,22 +130,21 @@ let start main =
 
     begin
       let config = Irmin_IDB.config import_db_name in
-      I.Repo.create config >>= fun repo ->
-      I.master make_task repo >>= fun store ->
-      let store = store "test" in
+      I.Repo.v config >>= fun repo ->
+      I.master repo >>= fun store ->
       print "Created new store. Checking it is empty...";
       I.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
 
       print "Importing from bundle...";
       I.Repo.import repo slice >>= function
-      | `Error -> die "Error importing slice"
-      | `Ok ->
+      | Error (`Msg m) -> die "Error importing slice: %s" m
+      | Ok () ->
 
-      I.fast_forward_head store head >>= function
-      | false -> die "fast_forward_head failed"
-      | true ->
+      I.Head.fast_forward store head >>= function
+      | Error _ -> die "fast_forward_head failed"
+      | Ok () ->
       print "Checking import worked...";
-      I.list store [] >>= expect ~fmt:key_list [key]
+      I.list store [] >>= expect ~fmt:key_list ["key", `Contents]
     end >>= fun () ->
 
     print "Success!";

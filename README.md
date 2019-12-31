@@ -1,7 +1,7 @@
 Irmin-IndexedDB
 ===============
 
-Copyright Thomas Leonard, 2015
+Copyright Thomas Leonard, 2019
 
 This is an Irmin backend that stores the data in the web-browser's IndexedDB store.
 
@@ -9,18 +9,17 @@ This is an Irmin backend that stores the data in the web-browser's IndexedDB sto
 Instructions
 ------------
 
-You'll need a version of `bin_prot` that works with `js_of_ocaml` and doesn't depend on `Base`,
-and a version of Irmin that doesn't depend on cohttp:
+You'll need to pin a few packages first:
 
-    opam pin add -yn bin_prot.114.06+90 'https://github.com/talex5/bin_prot.git#cuekeeper'
-    opam pin add -yn irmin.0.10.1 https://github.com/talex5/irmin.git#cuekeeper
+    opam pin add -yn bin_prot.113.33.00+4.05 https://github.com/talex5/bin_prot.git#113.33.00+4.05
+    opam pin add -yn irmin-git.1.0.0 https://github.com/talex5/irmin.git#1.0.0-cuekeeper
 
 To create an Irmin store, use e.g.
 
-    module I = Irmin.Basic(Irmin_IDB.Make)(Irmin.Contents.String)
+    module I = Irmin_IDB.Make(Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)
     let () =
       let config = Irmin_IDB.config "MyProg" in
-      I.create config make_task >>= fun store ->
+      I.v config make_task >>= fun store ->
       ...
 
 The argument to `Irmin_IDB.config` is the name of the database to use (default "Irmin").

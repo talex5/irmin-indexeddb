@@ -1,12 +1,9 @@
 (* Copyright (C) 2015, Thomas Leonard.
  * See the README file for details. *)
 
-open Lwt
+open Lwt.Infix
 open Iridb_utils
 open Js_of_ocaml
-
-let err_not_found n =
-  Lwt.fail (Invalid_argument (Printf.sprintf "IndexedDB.%s: not found" n))
 
 let db_name_key =
   Irmin.Private.Conf.(key "indexedDB.db_name" string "Irmin")
@@ -36,44 +33,71 @@ let connect db_name =
       failwith "Attempt to upgrade from unknown schema version!"
   )
 
-module RO (K: Irmin.Hum.S) (V: Tc.S0) = struct
+(* From irmin-git *)
+module Digest_of_hash (H: Irmin.Hash.S) : Git.Hash.DIGEST = struct
+  (* FIXME: lots of allocations ... *)
+  let cstruct buf = Git.Hash.of_raw (Cstruct.to_string (H.to_raw (H.digest buf)))
+  let string str = cstruct (Cstruct.of_string str)
+  let length = Cstruct.len @@ H.to_raw (H.digest (Cstruct.of_string ""))
+end
+
+module AO (H : Irmin.Hash.S) = struct
+  module Digest = Digest_of_hash(H)
+  module SHA_IO = Git.Hash.IO(Digest)
+  module Value_IO = Git.Value.IO(Digest)(Git.Inflate.None)
+
   type t = Iridb_lwt.store
 
+  let hash_of_string = SHA_IO.of_hex
+  let string_of_hash = SHA_IO.to_hex
+
+  let value_of_string str =
+    Value_IO.input_inflated (Mstruct.of_cstruct (Cstruct.of_string str))
+
+  let string_of_value v =
+    let b = Buffer.create 1024 in
+    Value_IO.add_inflated b v;
+    Buffer.contents b
+
   let read t k =
-    Iridb_lwt.get t (K.to_hum k) >|= function
+    Iridb_lwt.get t (string_of_hash k) >|= function
     | None -> None
-    | Some s -> Some (Tc.read_string (module V) s)
+    | Some s -> Some (value_of_string s)
 
   let mem t k =
-    Iridb_lwt.get t (K.to_hum k) >|= function
+    Iridb_lwt.get t (string_of_hash k) >|= function
     | None -> false
     | Some _ -> true
 
-  let iter t fn =
-    Iridb_lwt.bindings t >>=
-    Lwt_list.iter_p (fun (k, v) -> fn (K.of_hum k) (fun () -> return (Tc.read_string (module V) v)))
+  let contents t =
+    Iridb_lwt.bindings t >|= List.map (fun (k, v) -> (hash_of_string k, value_of_string v))
+
+  let write t value =
+    let value = string_of_value value in
+    let k = Digest.string value in
+    Iridb_lwt.set t (string_of_hash k) value >|= fun () -> k
+
+  let v idb =
+    Iridb_lwt.store idb ao
 end
 
-module AO (K: Irmin.Hash.S) (V: Tc.S0) = struct
-  include RO(K)(V)
-
-  let create config =
-    let db_name = Irmin.Private.Conf.get config db_name_key in
-    connect db_name >>= fun idb ->
-    return (Iridb_lwt.store idb ao)
-
-  let add t value =
-    let k = Tc.write_cstruct (module V) value |> K.digest in
-    let v = Tc.write_string (module V) value in
-    Iridb_lwt.set t (K.to_hum k) v >|= fun () -> k
-end
-
-module RW (K: Irmin.Hum.S) (V: Irmin.Hash.S) = struct
+module Branch_store (K: Irmin.Branch.S) (V: Irmin.Hash.S) = struct
   module W = Irmin.Private.Watch.Make(K)(V)
+
+  module Key = K
+  module Val = V
 
   type key = K.t
   type value = V.t
   type watch = W.watch
+
+  let string_of_key k =
+    Fmt.to_to_string K.pp k
+
+  let key_of_string s =
+    match K.of_string s with
+    | Ok k -> k
+    | Error (`Msg m) -> failwith m
 
   type t = {
     r : Iridb_lwt.store;
@@ -83,36 +107,29 @@ module RW (K: Irmin.Hum.S) (V: Irmin.Hash.S) = struct
     mutable listener : (Dom.event_listener_id * int) option;
   }
 
-  let create config =
-    let db_name = Irmin.Private.Conf.get config db_name_key in
+  let create ~db_name idb =
     let prefix = db_name ^ ".rw." in
-    let watch = W.create () in
+    let watch = W.v () in
     let notifications = Iridb_html_storage.make () in
-    connect db_name >>= fun idb ->
     let r = Iridb_lwt.store idb rw in
-    return { watch; r; prefix; notifications; listener = None }
+    { watch; r; prefix; notifications; listener = None }
 
   let string_of_hash x = Cstruct.to_string (V.to_raw x)
   let hash_of_string x = V.of_raw (Cstruct.of_string x)
 
-  let read t k =
-    Iridb_lwt.get t.r (K.to_hum k) >|= function
+  let find t k =
+    Iridb_lwt.get t.r (string_of_key k) >|= function
     | None -> None
     | Some s -> Some (hash_of_string s)
 
-  let read_exn t key =
-    read t key >>= function
-    | Some v -> return v
-    | None -> err_not_found "read"
-
   let mem t k =
-    Iridb_lwt.get t.r (K.to_hum k) >|= function
+    Iridb_lwt.get t.r (string_of_key k) >|= function
     | None -> false
     | Some _ -> true
 
-  let iter t fn =
-    Iridb_lwt.bindings t.r >>=
-    Lwt_list.iter_p (fun (k, v) -> fn (K.of_hum k) (fun () -> return (hash_of_string v)))
+  let list t =
+    Iridb_lwt.bindings t.r >|=
+    List.map (fun (k, _v) -> key_of_string k)
 
   let ref_listener t =
     match t.listener with
@@ -120,9 +137,9 @@ module RW (K: Irmin.Hum.S) (V: Irmin.Hash.S) = struct
         let l =
           Iridb_html_storage.watch t.notifications ~prefix:t.prefix (fun key value ->
             let subkey = tail key (String.length t.prefix) in
-            let ir_key = K.of_hum subkey in
+            let ir_key = key_of_string subkey in
             let value = value >|?= hash_of_string in
-            async (fun () -> W.notify t.watch ir_key value)
+            Lwt.async (fun () -> W.notify t.watch ir_key value)
           ) in
         t.listener <- Some (l, 1)
     | Some (l, n) ->
@@ -141,33 +158,33 @@ module RW (K: Irmin.Hum.S) (V: Irmin.Hash.S) = struct
   let notify t k new_value =
     (* Notify other tabs *)
     begin match new_value with
-    | None -> Iridb_html_storage.remove t.notifications (t.prefix ^ K.to_hum k)
-    | Some v -> Iridb_html_storage.set t.notifications (t.prefix ^ K.to_hum k) (string_of_hash v)
+    | None -> Iridb_html_storage.remove t.notifications (t.prefix ^ string_of_key k)
+    | Some v -> Iridb_html_storage.set t.notifications (t.prefix ^ string_of_key k) (string_of_hash v)
     end;
     (* Notify this tab *)
     W.notify t.watch k new_value
 
-  let update t k value =
+  let set t k value =
     (* Log.warn "Non-atomic update called!"; *)
     string_of_hash value
-    |> Iridb_lwt.set t.r (K.to_hum k) >>= fun () ->
+    |> Iridb_lwt.set t.r (string_of_key k) >>= fun () ->
     notify t k (Some value)
 
   let remove t k =
     (* Log.warn "Non-atomic remove called!"; *)
-    Iridb_lwt.remove t.r (K.to_hum k) >>= fun () ->
+    Iridb_lwt.remove t.r (string_of_key k) >>= fun () ->
     notify t k None
 
-  let compare_and_set t k ~test ~set =
+  let test_and_set t k ~test ~set =
     let pred old =
       match old, test with
       | None, None -> true
-      | Some old, Some expected -> hash_of_string old |> V.equal expected
+      | Some old, Some expected -> old = string_of_hash expected
       | _ -> false in
     let new_value = set >|?= string_of_hash in
-    Iridb_lwt.compare_and_set t.r (K.to_hum k) ~test:pred ~new_value >>= function
+    Iridb_lwt.compare_and_set t.r (string_of_key k) ~test:pred ~new_value >>= function
     | true -> notify t k set >|= fun () -> true
-    | false -> return false
+    | false -> Lwt.return false
 
   let watch t ?init cb =
     ref_listener t;
@@ -184,106 +201,36 @@ end
 
 let config db_name = Irmin.Private.Conf.singleton db_name_key db_name
 
-(* From irmin-git *)
-module Digest (H: Irmin.Hash.S): Git.Hash.DIGEST = struct
-  (* FIXME: lots of allocations ... *)
-  let cstruct buf = Git.Hash.of_raw (Cstruct.to_string (H.to_raw (H.digest buf)))
-  let string str = cstruct (Cstruct.of_string str)
-  let length = Cstruct.len @@ H.to_raw (H.digest (Cstruct.of_string ""))
-end
+module Make (C: Irmin.Contents.S) (P: Irmin.Path.S) (B: Irmin.Branch.S) = struct
+  module G = AO(Irmin.Hash.SHA1)
+  module RW = Branch_store(B)(Irmin.Hash.SHA1)
 
-module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
-  (* We could just replace this with [Irmin.Make], but we want things in Git format so
-     that we can sync with real Git repositories. *)
+  type repo = {
+    ao: G.t;
+    rw: RW.t;
+  }
 
-  module D = Digest(H)
-  module Value_IO = Git.Value.IO(D)(Git.Inflate.None)
+  module P = struct
+    include Irmin_git.Irmin_value_store(G)(C)(P)
+    module Branch = RW
+    module Slice = Irmin.Private.Slice.Make(Contents)(Node)(Commit)
+    module Sync = Irmin.Private.Sync.None(Commit.Key)(RW.Key)
+    module Repo = struct
+      type t = repo
 
-  module GitContents = struct
-    (* Serialises Git objects (e.g. [Blob "foo"]) using the Git format (e.g. "blob 3\0foo").
-       This means that they get the same hash that they would have got with the real Git. *)
+      let branch_t t = t.rw
+      let contents_t t = t.ao
+      let node_t t = contents_t t, t.ao
+      let commit_t t = node_t t, t.ao
 
-    type t = Git.Value.t
-    let equal = Git.Value.equal
-    let hash = Git.Value.hash
-    let compare = Git.Value.compare
-    let read = Value_IO.input
-    let to_string x =
-      let b = Buffer.create 1024 in
-      Value_IO.add b x;
-      Buffer.contents b
-    let write x cs =
-      let x = to_string x in
-      let l = String.length x in
-      Cstruct.blit_from_string x 0 cs 0 l;
-      Cstruct.shift cs l
-    let size_of x = to_string x |> String.length
-    let of_json _ = failwith "of_json"
-    let to_json _ = failwith "to_json"
+      let v config =
+        let db_name = Irmin.Private.Conf.get config db_name_key in
+        connect db_name >|= fun idb ->
+        let ao = G.v idb in
+        let rw = RW.create ~db_name idb in
+        { ao; rw }
+    end
   end
 
-  (* AO store for Git.Value.t objects *)
-  module Git_store = struct
-    (* Slight mismatch here, because we provide an Irmin API not a Git one *)
-    module Raw = AO(H)(GitContents)
-
-    type t = Raw.t
-
-    let create = Raw.create
-
-    let hash_of_digest d =
-      Git.Hash.to_raw d |> Cstruct.of_string |> H.of_raw
-
-    let digest_of_hash hash =
-      H.to_raw hash |> Cstruct.to_string |> Git.Hash.of_raw
-
-    let read t d =
-      Raw.read t (hash_of_digest d)
-
-    let mem t d =
-      Raw.mem t (hash_of_digest d)
-
-    let write t v =
-      Raw.add t v >|= digest_of_hash
-
-    let contents t =
-      let results = ref [] in
-      Raw.iter t (fun k v ->
-          v () >>= fun v ->
-          results := (digest_of_hash k, v) :: !results;
-          return ()
-        ) >|= fun () ->
-      !results
-
-    module Digest = D
-  end
-
-  module Y = Irmin_git.Irmin_value_store(Git_store)(C)(H)
-  include Irmin.Make_ext(struct
-      module Contents = Irmin.Contents.Store(Y.Contents)
-      module Node = Y.Node
-      module Commit = Y.Commit
-      module Ref = struct
-        module Key = T
-        module Val = H
-        include RW (T)(H)
-      end
-      module Slice = Irmin.Private.Slice.Make(Contents)(Node)(Commit)
-      module Sync = Irmin.Private.Sync.None(Commit.Key)(T)
-      module Repo = struct
-        type t = {
-          ao: Git_store.t;
-          rw: Ref.t;
-        }
-        let ref_t t = t.rw
-        let node_t t = t.ao, t.ao
-        let commit_t t = node_t t, t.ao
-        let contents_t t = t.ao
-
-        let create config =
-          Git_store.create config >>= fun ao ->
-          Ref.create config       >>= fun rw ->
-          Lwt.return { ao; rw }
-      end
-    end)
+  include Irmin.Make_ext(P)
 end
