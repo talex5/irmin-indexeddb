@@ -51,7 +51,7 @@ module RO (K: Irmin.Hum.S) (V: Tc.S0) = struct
 
   let iter t fn =
     Iridb_lwt.bindings t >>=
-    Lwt_list.iter_p (fun (k, v) -> fn (K.of_hum k) (return (Tc.read_string (module V) v)))
+    Lwt_list.iter_p (fun (k, v) -> fn (K.of_hum k) (fun () -> return (Tc.read_string (module V) v)))
 end
 
 module AO (K: Irmin.Hash.S) (V: Tc.S0) = struct
@@ -112,7 +112,7 @@ module RW (K: Irmin.Hum.S) (V: Irmin.Hash.S) = struct
 
   let iter t fn =
     Iridb_lwt.bindings t.r >>=
-    Lwt_list.iter_p (fun (k, v) -> fn (K.of_hum k) (return (hash_of_string v)))
+    Lwt_list.iter_p (fun (k, v) -> fn (K.of_hum k) (fun () -> return (hash_of_string v)))
 
   let ref_listener t =
     match t.listener with
@@ -185,9 +185,9 @@ end
 let config db_name = Irmin.Private.Conf.singleton db_name_key db_name
 
 (* From irmin-git *)
-module Digest (H: Irmin.Hash.S): Git.SHA.DIGEST = struct
+module Digest (H: Irmin.Hash.S): Git.Hash.DIGEST = struct
   (* FIXME: lots of allocations ... *)
-  let cstruct buf = Git.SHA.of_raw (Cstruct.to_string (H.to_raw (H.digest buf)))
+  let cstruct buf = Git.Hash.of_raw (Cstruct.to_string (H.to_raw (H.digest buf)))
   let string str = cstruct (Cstruct.of_string str)
   let length = Cstruct.len @@ H.to_raw (H.digest (Cstruct.of_string ""))
 end
@@ -232,10 +232,10 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
     let create = Raw.create
 
     let hash_of_digest d =
-      Git.SHA.to_raw d |> Cstruct.of_string |> H.of_raw
+      Git.Hash.to_raw d |> Cstruct.of_string |> H.of_raw
 
     let digest_of_hash hash =
-      H.to_raw hash |> Cstruct.to_string |> Git.SHA.of_raw
+      H.to_raw hash |> Cstruct.to_string |> Git.Hash.of_raw
 
     let read t d =
       Raw.read t (hash_of_digest d)
@@ -249,7 +249,7 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
     let contents t =
       let results = ref [] in
       Raw.iter t (fun k v ->
-          v >>= fun v ->
+          v () >>= fun v ->
           results := (digest_of_hash k, v) :: !results;
           return ()
         ) >|= fun () ->
@@ -260,7 +260,7 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
 
   module Y = Irmin_git.Irmin_value_store(Git_store)(C)(H)
   include Irmin.Make_ext(struct
-      module Contents = Irmin.Contents.Make(Y.Contents)
+      module Contents = Irmin.Contents.Store(Y.Contents)
       module Node = Y.Node
       module Commit = Y.Commit
       module Ref = struct
@@ -276,8 +276,8 @@ module Make (C: Irmin.Contents.S) (T: Irmin.Ref.S) (H: Irmin.Hash.S) = struct
           rw: Ref.t;
         }
         let ref_t t = t.rw
-        let commit_t t = t.ao
-        let node_t t = t.ao
+        let node_t t = t.ao, t.ao
+        let commit_t t = node_t t, t.ao
         let contents_t t = t.ao
 
         let create config =
