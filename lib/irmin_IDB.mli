@@ -1,10 +1,14 @@
-(* Copyright (C) 2015, Thomas Leonard
+(* Copyright (C) 2019, Thomas Leonard
  * See the README file for details. *)
 
 (** An Irmin backend that stores data in an IndexedDB. *)
 
 (* [config db_name] store all values in the given IndexedDB database. *)
 val config : string -> Irmin.config
+
+exception Format_too_old of [`Irmin_0_10]
+(** Raised on [Repo.create] if the existing data format cannot be read by this version of irmin-indexeddb.
+    To migrate Irmin 0.10 format data, upgrade to irmin-indexeddb version 0.6 first. *)
 
 module Make (C: Irmin.Contents.S) (R: Irmin.Ref.S) (H: Irmin.Hash.S) : sig
   include Irmin.S
@@ -13,9 +17,4 @@ module Make (C: Irmin.Contents.S) (R: Irmin.Ref.S) (H: Irmin.Hash.S) : sig
      and type value = C.t
      and type branch_id = R.t
      and type commit_id = H.t
-
-  val create_full: log:(string -> unit) -> Irmin.config -> Repo.t Lwt.t
-  (** [create_full ~log config] is like [Repo.create] but if a database
-      migration is required, it writes progress messages to [log] rather than
-      to the console. *)
 end
