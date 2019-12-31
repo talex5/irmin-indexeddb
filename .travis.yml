@@ -3,4 +3,4 @@ sudo: required
 install: wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-opam.sh
 script: bash -ex .travis-opam.sh
 env:
-  - OCAML_VERSION=4.04 PINS="bin_prot.114.06+90:https://github.com/talex5/bin_prot.git#cuekeeper mirage-conduit:3.0.1"
+  - OCAML_VERSION=4.05 PINS="bin_prot.113.33.00+4.05:https://github.com/talex5/bin_prot.git#113.33.00+4.05 irmin.0.10.1:https://github.com/talex5/irmin.git#cuekeeper"

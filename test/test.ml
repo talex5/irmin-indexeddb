@@ -76,7 +76,7 @@ let start main =
       | None -> assert false
       | Some head ->
       print "Head: %s" (Irmin.Hash.SHA1.to_hum head);
-      I.update store key "value2" >>= fun () ->
+      I.update store key "value3" >>= fun () ->
       I.history store >>= fun hist ->
       I.History.iter_succ (fun head ->
         print "Parent: %s" (Irmin.Hash.SHA1.to_hum head)
@@ -84,15 +84,17 @@ let start main =
 
       print "Dumping DB contents...";
 
-      Iridb_lwt.make db_name ~version:2 ~init:(fun _ -> assert false) >>= fun db ->
-      dump_bindings db "ao" >>= fun () ->
-      dump_bindings db "rw" >|= fun () ->
+      Iridb_lwt.make db_name ~version:3 ~init:(fun ~old_version:_ _ -> assert false) >>= fun db ->
+      dump_bindings db "ao_git" >>= fun () ->
+      dump_bindings db "rw_git" >|= fun () ->
       Iridb_lwt.close db
     end >>= fun () ->
 
     print "Testing ability to read v1 format db";
     begin
-      let init upgrader =
+      print "Importing old db dump...";
+      let init ~old_version upgrader =
+        assert (old_version = 0);
         Iridb_lwt.(create_store upgrader (store_name "ao"));
         Iridb_lwt.(create_store upgrader (store_name "rw")) in
       Iridb_lwt.make upgrade_db_name ~version:2 ~init >>= fun db ->
@@ -100,8 +102,9 @@ let start main =
       load_bindings db "rw" V1_db.rw >>= fun () ->
       Iridb_lwt.close db;
 
+      print "Opening old db...";
       let config = Irmin_IDB.config upgrade_db_name in
-      I.Repo.create config >>= fun up_repo ->
+      I.create_full ~log:(print "%s") config >>= fun up_repo ->
       I.master make_task up_repo >>= fun up_store ->
       let up_store = up_store "test" in
       I.read_exn up_store key >>= expect_str "value2" >>= fun () ->
@@ -113,6 +116,14 @@ let start main =
       | Some head ->
       return (slice, head)
     end >>= fun (slice, head) ->
+
+    begin
+      Iridb_lwt.make upgrade_db_name ~version:3 ~init:(fun ~old_version:_ _ -> assert false) >>= fun db ->
+      dump_bindings db "ao" >>= fun () ->
+      dump_bindings db "ao_git" >>= fun () ->
+      dump_bindings db "rw" >>= fun () ->
+      dump_bindings db "rw_git"
+    end >>= fun () ->
 
     begin
       let config = Irmin_IDB.config import_db_name in

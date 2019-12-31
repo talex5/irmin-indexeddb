@@ -7,13 +7,14 @@ license: "ISC"
 homepage: "https://github.com/talex5/irmin-indexeddb"
 bug-reports: "https://github.com/talex5/irmin-indexeddb/issues"
 depends: [
-  "ocaml"
+  "ocaml" {>= "4.5.0"}
   "base64" {>= "3.0.0"}
   "irmin" {>= "0.10.0" & < "0.11.0"}
   "cstruct" {>= "1.7.0"}
   "js_of_ocaml" {>= "3.0"}
   "js_of_ocaml-lwt"
   "js_of_ocaml-ppx"
+  "git" {= "1.7.1"}
   "lwt"
 ]
 build: [
