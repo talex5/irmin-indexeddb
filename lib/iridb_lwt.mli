@@ -21,6 +21,7 @@ val close : db -> unit
 val delete_database : db_name -> unit Lwt.t
 
 val create_store : db_upgrader -> store_name -> unit
+val delete_store : db_upgrader -> store_name -> unit
 
 val store : db -> store_name -> store
 

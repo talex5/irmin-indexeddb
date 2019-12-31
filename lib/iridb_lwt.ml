@@ -105,6 +105,9 @@ let store db store_name = { db; store_name; ro_trans = None }
 let create_store db name =
   db##createObjectStore name |> ignore
 
+let delete_store db name =
+  db##deleteObjectStore name
+
 let rec trans_ro (t:store) setup =
   let r, set_r = Lwt.wait () in
   match t.ro_trans with
