@@ -36,9 +36,9 @@ let connect db_name =
 (* From irmin-git *)
 module Digest_of_hash (H: Irmin.Hash.S) : Git.Hash.DIGEST = struct
   (* FIXME: lots of allocations ... *)
-  let cstruct buf = Git.Hash.of_raw (Cstruct.to_string (H.to_raw (H.digest buf)))
+  let cstruct buf = Git.Hash.of_raw (Cstruct.to_string (H.to_raw (H.digest Irmin.Type.cstruct buf)))
   let string str = cstruct (Cstruct.of_string str)
-  let length = Cstruct.len @@ H.to_raw (H.digest (Cstruct.of_string ""))
+  let length = Cstruct.len @@ H.to_raw (H.digest Irmin.Type.cstruct (Cstruct.of_string ""))
 end
 
 module AO (H : Irmin.Hash.S) = struct
@@ -205,18 +205,16 @@ module Make (C: Irmin.Contents.S) (P: Irmin.Path.S) (B: Irmin.Branch.S) = struct
   module G = AO(Irmin.Hash.SHA1)
   module RW = Branch_store(B)(Irmin.Hash.SHA1)
 
-  type repo = {
-    ao: G.t;
-    rw: RW.t;
-  }
-
   module P = struct
     include Irmin_git.Irmin_value_store(G)(C)(P)
     module Branch = RW
     module Slice = Irmin.Private.Slice.Make(Contents)(Node)(Commit)
     module Sync = Irmin.Private.Sync.None(Commit.Key)(RW.Key)
     module Repo = struct
-      type t = repo
+      type t = {
+        ao: G.t;
+        rw: RW.t;
+      }
 
       let branch_t t = t.rw
       let contents_t t = t.ao

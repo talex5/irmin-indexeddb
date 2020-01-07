@@ -9,10 +9,9 @@ This is an Irmin backend that stores the data in the web-browser's IndexedDB sto
 Instructions
 ------------
 
-You'll need to pin a few packages first:
+You'll need to pin a fixed version of `irmin-git` first:
 
-    opam pin add -yn bin_prot.113.33.00+4.05 https://github.com/talex5/bin_prot.git#113.33.00+4.05
-    opam pin add -yn irmin-git.1.0.0 https://github.com/talex5/irmin.git#1.0.0-cuekeeper
+    opam pin add -yn irmin-git.1.4.0 https://github.com/talex5/irmin.git#1.4.0-cuekeeper
 
 To create an Irmin store, use e.g.
 
