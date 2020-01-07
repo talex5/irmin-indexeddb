@@ -1,3 +1,26 @@
+## v1.0
+
+This version updates irmin-indexeddb to use the Irmin 1.0 API. This is a major
+breaking change to the API because the Irmin API changed a lot in 1.0. When
+upgrading from irmin-indexeddb 0.6, existing databases can still be read. To
+upgrade from earlier releases you must first upgrade to v0.6 and let it convert
+the data from the Irmin 0.10 format to Git format.
+
+Attempting to open an old-format database using this version will raise the
+exception `Format_too_old Irmin_0_10`. If your application used to use versions
+of irmin-indexeddb before v0.6 then you should catch this and tell users to
+first upgrade to a version of your application that uses v0.6.
+
+Note that it is no longer possible to pass a custom hash to `Make`. `Irmin_git`
+now always uses SHA1, for compatibilty with Git. It is not possible to upgrade
+from a database using a different hash (I'm not aware of anyone using a different
+hash).
+
+Due to some missing type equalities in `irmin_git`, you will need to pin this
+branch too:
+
+    opam pin add irmin-git.1.0.0 https://github.com/talex5/irmin.git#1.0.0-cuekeeper
+
 ## v0.6
 
 Data is now stored using the standard Git format, rather than the Irmin 0.10
