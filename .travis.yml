@@ -3,4 +3,4 @@ sudo: required
 install: wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-opam.sh
 script: bash -ex .travis-opam.sh
 env:
-  - OCAML_VERSION=4.05 PINS="irmin-git.1.4.0:https://github.com/talex5/irmin.git#1.4.0-cuekeeper"
+  - OCAML_VERSION=4.08 PINS="irmin-git.2.0.0:https://github.com/talex5/irmin.git#2.0.0-cuekeeper"
