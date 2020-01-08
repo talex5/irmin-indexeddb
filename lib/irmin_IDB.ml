@@ -1,4 +1,4 @@
-(* Copyright (C) 2015, Thomas Leonard.
+(* Copyright (C) 2020, Thomas Leonard.
  * See the README file for details. *)
 
 open Lwt.Infix
@@ -6,7 +6,7 @@ open Iridb_utils
 open Js_of_ocaml
 
 let db_name_key =
-  Irmin.Private.Conf.(key "indexedDB.db_name" string "Irmin")
+  Irmin.Private.Conf.(key "indexeddb_db_name" string "Irmin")
 
 let ao = Iridb_lwt.store_name "ao_git"
 let rw = Iridb_lwt.store_name "rw_git"
@@ -33,33 +33,21 @@ let connect db_name =
       failwith "Attempt to upgrade from unknown schema version!"
   )
 
-(* From irmin-git *)
-module Digest_of_hash (H: Irmin.Hash.S) : Git.Hash.DIGEST = struct
-  (* FIXME: lots of allocations ... *)
-  let cstruct buf = Git.Hash.of_raw (Cstruct.to_string (H.to_raw (H.digest Irmin.Type.cstruct buf)))
-  let string str = cstruct (Cstruct.of_string str)
-  let length = Cstruct.len @@ H.to_raw (H.digest Irmin.Type.cstruct (Cstruct.of_string ""))
-end
+module Content_store (K : Irmin.Hash.S) (V : Irmin.Type.S) = struct
+  type 'a t = Iridb_lwt.store
+  type key = K.t
+  type value = V.t
 
-module AO (H : Irmin.Hash.S) = struct
-  module Digest = Digest_of_hash(H)
-  module SHA_IO = Git.Hash.IO(Digest)
-  module Value_IO = Git.Value.IO(Digest)(Git.Inflate.None)
+  let string_of_hash = Irmin.Type.to_string K.t
 
-  type t = Iridb_lwt.store
+  let value_of_string s =
+    match Irmin.Type.of_bin_string V.t s with
+    | Ok x -> x
+    | Error (`Msg m) -> failwith m
 
-  let hash_of_string = SHA_IO.of_hex
-  let string_of_hash = SHA_IO.to_hex
+  let string_of_value = Irmin.Type.to_bin_string V.t
 
-  let value_of_string str =
-    Value_IO.input_inflated (Mstruct.of_cstruct (Cstruct.of_string str))
-
-  let string_of_value v =
-    let b = Buffer.create 1024 in
-    Value_IO.add_inflated b v;
-    Buffer.contents b
-
-  let read t k =
+  let find t k =
     Iridb_lwt.get t (string_of_hash k) >|= function
     | None -> None
     | Some s -> Some (value_of_string s)
@@ -69,19 +57,26 @@ module AO (H : Irmin.Hash.S) = struct
     | None -> false
     | Some _ -> true
 
-  let contents t =
-    Iridb_lwt.bindings t >|= List.map (fun (k, v) -> (hash_of_string k, value_of_string v))
-
-  let write t value =
+  let unsafe_add t key value =
     let value = string_of_value value in
-    let k = Digest.string value in
+    Iridb_lwt.set t (string_of_hash key) value
+
+  let add t value =
+    let value = string_of_value value in
+    let k = K.hash (fun add -> add value) in
     Iridb_lwt.set t (string_of_hash k) value >|= fun () -> k
 
-  let v idb =
+  let batch t fn = fn t
+
+  let close _ = Lwt.return_unit
+
+  let v config =
+    let db_name = Irmin.Private.Conf.get config db_name_key in
+    connect db_name >|= fun idb ->
     Iridb_lwt.store idb ao
 end
 
-module Branch_store (K: Irmin.Branch.S) (V: Irmin.Hash.S) = struct
+module Branch_store (K: Irmin.Type.S) (V: Irmin.Type.S) = struct
   module W = Irmin.Private.Watch.Make(K)(V)
 
   module Key = K
@@ -91,11 +86,10 @@ module Branch_store (K: Irmin.Branch.S) (V: Irmin.Hash.S) = struct
   type value = V.t
   type watch = W.watch
 
-  let string_of_key k =
-    Fmt.to_to_string K.pp k
+  let string_of_key = Irmin.Type.to_string K.t
 
   let key_of_string s =
-    match K.of_string s with
+    match Irmin.Type.of_string K.t s with
     | Ok k -> k
     | Error (`Msg m) -> failwith m
 
@@ -107,15 +101,20 @@ module Branch_store (K: Irmin.Branch.S) (V: Irmin.Hash.S) = struct
     mutable listener : (Dom.event_listener_id * int) option;
   }
 
-  let create ~db_name idb =
+  let v config =
+    let db_name = Irmin.Private.Conf.get config db_name_key in
+    connect db_name >|= fun idb ->
     let prefix = db_name ^ ".rw." in
     let watch = W.v () in
     let notifications = Iridb_html_storage.make () in
     let r = Iridb_lwt.store idb rw in
     { watch; r; prefix; notifications; listener = None }
 
-  let string_of_hash x = Cstruct.to_string (V.to_raw x)
-  let hash_of_string x = V.of_raw (Cstruct.of_string x)
+  let string_of_hash = Irmin.Type.to_bin_string V.t
+  let hash_of_string x =
+    match Irmin.Type.of_bin_string V.t x with
+    | Ok x -> x
+    | Error (`Msg m) -> failwith m
 
   let find t k =
     Iridb_lwt.get t.r (string_of_key k) >|= function
@@ -197,38 +196,8 @@ module Branch_store (K: Irmin.Branch.S) (V: Irmin.Hash.S) = struct
   let watch_key t key ?init cb =
     ref_listener t;
     W.watch_key t.watch key ?init cb
+
+  let close _ = Lwt.return_unit
 end
 
 let config db_name = Irmin.Private.Conf.singleton db_name_key db_name
-
-module Make (C: Irmin.Contents.S) (P: Irmin.Path.S) (B: Irmin.Branch.S) = struct
-  module G = AO(Irmin.Hash.SHA1)
-  module RW = Branch_store(B)(Irmin.Hash.SHA1)
-
-  module P = struct
-    include Irmin_git.Irmin_value_store(G)(C)(P)
-    module Branch = RW
-    module Slice = Irmin.Private.Slice.Make(Contents)(Node)(Commit)
-    module Sync = Irmin.Private.Sync.None(Commit.Key)(RW.Key)
-    module Repo = struct
-      type t = {
-        ao: G.t;
-        rw: RW.t;
-      }
-
-      let branch_t t = t.rw
-      let contents_t t = t.ao
-      let node_t t = contents_t t, t.ao
-      let commit_t t = node_t t, t.ao
-
-      let v config =
-        let db_name = Irmin.Private.Conf.get config db_name_key in
-        connect db_name >|= fun idb ->
-        let ao = G.v idb in
-        let rw = RW.create ~db_name idb in
-        { ao; rw }
-    end
-  end
-
-  include Irmin.Make_ext(P)
-end

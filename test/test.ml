@@ -2,7 +2,16 @@ open Lwt
 open Js_of_ocaml
 module Lwt_js_events = Js_of_ocaml_lwt.Lwt_js_events
 
-module I = Irmin_IDB.Make(Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)
+(* A Git-format store. This data can be exported and used with the regular Git
+   tools. It can also read data produced by older versions of irmin-indexeddb. *)
+module I = Irmin_git.Generic(Irmin_IDB.Content_store)(Irmin_IDB.Branch_store)
+    (Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)
+
+(* An Irmin-format store. This allows storing custom metadata or using
+   different hash functions, but is not compatible with the Git tools or with
+   databases created by older versions of irmin-indexeddb. *)
+module Plain = Irmin.Make(Irmin_IDB.Content_store)(Irmin_IDB.Branch_store)
+    (Irmin.Metadata.None)(Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)(Irmin.Hash.SHA256)
 
 let key = ["key"]
 
@@ -16,6 +25,7 @@ let die fmt =
 let db_name = "Irmin_IndexedDB_test"
 let upgrade_db_name = "Irmin_IndexedDB_t2"
 let import_db_name = "Irmin_IndexedDB_t3"
+let plain_db_name = "Irmin_IndexedDB_test_plain"
 
 let start main =
   let document = Dom_html.document in
@@ -60,14 +70,46 @@ let start main =
     Iridb_lwt.delete_database db_name >>= fun () ->
     Iridb_lwt.delete_database upgrade_db_name >>= fun () ->
     Iridb_lwt.delete_database import_db_name >>= fun () ->
+    Iridb_lwt.delete_database plain_db_name >>= fun () ->
+
+    begin
+      let config = Irmin_IDB.config plain_db_name in
+      Plain.Repo.v config >>= Plain.master >>= fun store ->
+      print "Created Irmin-format basic store. Checking it is empty...";
+      Plain.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
+      let info = Irmin.Info.none in
+      Plain.set_exn ~info store key "value" >>= fun () ->
+      print "Added test item. Reading it back...";
+      Plain.get store key >>= expect_str "value" >>= fun () ->
+
+      print "Listing contents...";
+      Plain.list store [] >>= expect ~fmt:key_list ["key", `Contents] >>= fun () ->
+
+      Plain.Head.find store >>= function
+      | None -> assert false
+      | Some head ->
+      print "Head: %a" Plain.Commit.pp_hash head;
+      Plain.set_exn ~info store key "value3" >>= fun () ->
+      Plain.history store >>= fun hist ->
+      Plain.History.iter_succ (fun head ->
+        print "Parent: %a" Plain.Commit.pp_hash head
+      ) hist head;
+
+      print "Dumping DB contents... (ignore _git suffix)";
+
+      Iridb_lwt.make plain_db_name ~version:4 ~init:(fun ~old_version:_ _ -> assert false) >>= fun db ->
+      dump_bindings db "ao_git" >>= fun () ->
+      dump_bindings db "rw_git" >|= fun () ->
+      Iridb_lwt.close db
+    end >>= fun () ->
 
     begin
       let config = Irmin_IDB.config db_name in
       I.Repo.v config >>= I.master >>= fun store ->
-      print "Created basic store. Checking it is empty...";
+      print "Created Git-format basic store. Checking it is empty...";
       I.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
       let info = Irmin.Info.none in
-      I.set ~info store key "value" >>= fun () ->
+      I.set_exn ~info store key "value" >>= fun () ->
       print "Added test item. Reading it back...";
       I.get store key >>= expect_str "value" >>= fun () ->
 
@@ -77,11 +119,11 @@ let start main =
       I.Head.find store >>= function
       | None -> assert false
       | Some head ->
-      print "Head: %a" I.Commit.pp head;
-      I.set ~info store key "value3" >>= fun () ->
+      print "Head: %a" I.Commit.pp_hash head;
+      I.set_exn ~info store key "value3" >>= fun () ->
       I.history store >>= fun hist ->
       I.History.iter_succ (fun head ->
-        print "Parent: %a" I.Commit.pp head
+        print "Parent: %a" I.Commit.pp_hash head
       ) hist head;
 
       print "Dumping DB contents...";
