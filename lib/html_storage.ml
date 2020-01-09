@@ -1,7 +1,6 @@
 (* Copyright (C) 2015, Thomas Leonard.
  * See the README file for details. *)
 
-open Iridb_utils
 open Js_of_ocaml
 
 class type storageEvent =
@@ -24,10 +23,10 @@ let make () =
 let get t key =
   Js.Opt.case (t##getItem (Js.string key))
     (fun () -> None)
-    (fun v -> Some (Js.to_string v |> UTF8_codec.decode))
+    (fun v -> Some (Js.to_string v |> Utf8_codec.decode))
 
 let set t key value =
-  let encoded = UTF8_codec.encode value |> Js.string in
+  let encoded = Utf8_codec.encode value |> Js.string in
   t##setItem (Js.string key) encoded
 
 let remove t key =
@@ -47,7 +46,7 @@ let watch t ~prefix fn =
           Js.Opt.case ev##.newValue
             (fun () -> None)
             (fun v ->
-              Some (Js.to_string v |> UTF8_codec.decode)) in
+              Some (Js.to_string v |> Utf8_codec.decode)) in
         fn k v
       )
     );
