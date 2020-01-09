@@ -17,3 +17,6 @@ exception Format_too_old of [`Irmin_0_10]
 (** Raised on creation if the existing data format cannot be read by this version of irmin-indexeddb.
     To migrate Irmin 0.10 format data, upgrade to irmin-indexeddb version 0.6 first.
     Note: to be able to read old databases you must use a Git-format store. *)
+
+module Raw = Raw
+(** Direct access to the stores. This is intended only for use in unit-tests. *)
