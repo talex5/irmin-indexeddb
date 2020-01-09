@@ -1,3 +1,7 @@
+## v1.3
+
+Update to Irmin 1.3 API.
+
 ## v1.0
 
 This version updates irmin-indexeddb to use the Irmin 1.0 API. This is a major
