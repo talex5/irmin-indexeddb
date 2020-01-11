@@ -22,7 +22,7 @@ For Git format (you'll need to add `irmin-git` as a dependency), use:
 ```ocaml
 (* A Git-format store. This data can be exported and used with the regular Git
    tools. It can also read data produced by older versions of irmin-indexeddb. *)
-module I = Irmin_git.Generic(Irmin_IDB.Content_store)(Irmin_IDB.Branch_store)
+module I = Irmin_git.Generic(Irmin_indexeddb.Content_store)(Irmin_indexeddb.Branch_store)
     (Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)
 ```
 
@@ -32,8 +32,9 @@ For Irmin format, use:
 (* An Irmin-format store. This allows storing custom metadata or using
    different hash functions, but is not compatible with the Git tools or with
    databases created by older versions of irmin-indexeddb. *)
-module I = Irmin.Make(Irmin_IDB.Content_store)(Irmin_IDB.Branch_store)(Irmin.Metadata.None)
-    (Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)(Irmin.Hash.SHA256)
+module I = Irmin.Make(Irmin_indexeddb.Content_store)(Irmin_indexeddb.Branch_store)
+    (Irmin.Metadata.None)(Irmin.Contents.String)
+    (Irmin.Path.String_list)(Irmin.Branch.String)(Irmin.Hash.SHA256)
 ```
 
 To create a store, use e.g.

@@ -1,3 +1,29 @@
+## v2.0
+
+Update to Irmin 2.0 API. This way that stores are constructed has changed in Irmin 2.0.
+Now, irmin-indexeddb just provides the raw contents and branch stores and the application
+uses these to create a full Irmin store. This means that you can use irmin-indexeddb to
+create either Git-format or Irmin-format stores, and you can avoid a dependency on irmin-git
+if you don't need Git-format stores.
+
+For Irmin format, use e.g.:
+
+```ocaml
+module I = Irmin.Make(Irmin_indexeddb.Content_store)(Irmin_indexeddb.Branch_store)
+    (Irmin.Metadata.None)(Irmin.Contents.String)
+    (Irmin.Path.String_list)(Irmin.Branch.String)(Irmin.Hash.SHA256)
+```
+
+For a Git format store, use:
+
+```ocaml
+module I = Irmin_git.Generic(Irmin_indexeddb.Content_store)(Irmin_indexeddb.Branch_store)
+    (Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)
+```
+
+If you have an existing database created by an older version of
+irmin-indexeddb, then you *must* create a Git-format store.
+
 ## v1.3
 
 Update to Irmin 1.3 API.
