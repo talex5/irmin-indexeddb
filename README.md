@@ -1,7 +1,7 @@
 Irmin-IndexedDB
 ===============
 
-Copyright Thomas Leonard, 2019
+Copyright Thomas Leonard, 2020
 
 This is an Irmin backend that stores the data in the web-browser's IndexedDB store.
 
@@ -11,11 +11,33 @@ Instructions
 
 You'll need to pin a fixed version of `irmin-git` first:
 
-    opam pin add -yn irmin-git.1.4.0 https://github.com/talex5/irmin.git#1.4.0-cuekeeper
+    opam pin add -yn irmin-git.2.0.0 https://github.com/talex5/irmin.git#2.0.0-cuekeeper
 
-To create an Irmin store, use e.g.
+Also, until https://github.com/mirage/encore/issues/13 is fixed, you'll need to link with
+[helpers.js](blob/master/test/helpers.js) to add a missing stub.
 
-    module I = Irmin_IDB.Make(Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)
+You can create stores using either the standard Git format, or using Irmin's own format.
+For Git format (you'll need to add `irmin-git` as a dependency), use:
+
+```ocaml
+(* A Git-format store. This data can be exported and used with the regular Git
+   tools. It can also read data produced by older versions of irmin-indexeddb. *)
+module I = Irmin_git.Generic(Irmin_IDB.Content_store)(Irmin_IDB.Branch_store)
+    (Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)
+```
+
+For Irmin format, use:
+
+```ocaml
+(* An Irmin-format store. This allows storing custom metadata or using
+   different hash functions, but is not compatible with the Git tools or with
+   databases created by older versions of irmin-indexeddb. *)
+module I = Irmin.Make(Irmin_IDB.Content_store)(Irmin_IDB.Branch_store)(Irmin.Metadata.None)
+    (Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)(Irmin.Hash.SHA256)
+```
+
+To create a store, use e.g.
+
     let () =
       let config = Irmin_IDB.config "MyProg" in
       I.v config make_task >>= fun store ->

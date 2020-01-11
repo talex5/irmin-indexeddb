@@ -1,5 +1,5 @@
 (* Copyright (C) 2015, Thomas Leonard.
- * See the README file for details. *)
+   See the README file for details. *)
 
 (** Friendly OCaml/Lwt abstraction over IndexedDB. *)
 

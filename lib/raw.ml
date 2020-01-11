@@ -2,11 +2,10 @@
  * See the README file for details. *)
 
 open Lwt
-open Iridb_utils
 open Js_of_ocaml
 module Lwt_js = Js_of_ocaml_lwt.Lwt_js
 
-type db = Iridb_js_api.database Js.t
+type db = Js_api.database Js.t
 type store_name = Js.js_string Js.t
 
 type store = {
@@ -16,12 +15,12 @@ type store = {
   (* We reuse transactions where possible for performance.
    * This does mean that if any read fails then the others will hang, but we treat any
    * read failing as a fatal error anyway. *)
-  mutable ro_trans : (Iridb_js_api.transaction Js.t * (exn -> unit) list ref) option;
+  mutable ro_trans : (Js_api.transaction Js.t * (exn -> unit) list ref) option;
 }
 
 type key = string
 type db_name = string
-type db_upgrader = Iridb_js_api.database Js.t
+type db_upgrader = Js_api.database Js.t
 let store_name = Js.string
 
 let opt_string x ~if_missing =
@@ -31,7 +30,7 @@ let opt_string x ~if_missing =
 
 exception AbortError
 
-let idb_error typ (event:Iridb_js_api.request Iridb_js_api.errorEvent Js.t) =
+let idb_error typ (event:Js_api.request Js_api.errorEvent Js.t) =
   let failure msg = Failure (Printf.sprintf "IndexedDB operation (%s) failed: %s" typ msg) in
   Js.Opt.case event##.target
     (fun () -> failure "(missing target on error event)")
@@ -48,7 +47,7 @@ let idb_error typ (event:Iridb_js_api.request Iridb_js_api.errorEvent Js.t) =
     )
 
 let get_factory () =
-  let factory : Iridb_js_api.factory Js.t Js.Optdef.t = (Obj.magic Dom_html.window)##.indexedDB in
+  let factory : Js_api.factory Js.t Js.Optdef.t = (Obj.magic Dom_html.window)##.indexedDB in
   Js.Optdef.get factory
     (fun () -> failwith "IndexedDB not available")
 
@@ -174,7 +173,7 @@ let bindings t =
           (fun () -> Lwt.wakeup set_r !bindings)
           (fun cursor ->
             let key = cursor##.key |> Js.to_string in
-            let value = cursor##.value |> Js.to_string |> UTF8_codec.decode in
+            let value = cursor##.value |> Js.to_string |> Utf8_codec.decode in
             bindings := (key, value) :: !bindings;
             cursor##continue
           );
@@ -184,7 +183,7 @@ let bindings t =
 
 let set t key value =
   trans_rw t (fun store ->
-    store##put (Js.string (UTF8_codec.encode value)) (Js.string key) |> ignore
+    store##put (Js.string (Utf8_codec.encode value)) (Js.string key) |> ignore
   )
 
 let remove t key =
@@ -200,7 +199,7 @@ let get t key =
       request##.onsuccess := Dom.handler (fun _event ->
         Js.Optdef.case request##.result
           (fun () -> None)
-          (fun s -> Some (Js.to_string s |> UTF8_codec.decode))
+          (fun s -> Some (Js.to_string s |> Utf8_codec.decode))
         |> Lwt.wakeup set_r;
         Js._true
       )
@@ -213,13 +212,14 @@ let compare_and_set t key ~test ~new_value =
     (fun store ->
       let request = store##get key in
       request##.onsuccess := Dom.handler (fun _event ->
-        let actual =
-          Js.Optdef.to_option request##.result
-          >|?= fun x -> Js.to_string x |> UTF8_codec.decode in
+          let actual =
+            Utils.option_map (fun x -> Js.to_string x |> Utf8_codec.decode)
+              (Js.Optdef.to_option request##.result)
+        in
         if test actual then (
           begin match new_value with
           | None -> store##delete key |> ignore
-          | Some new_value -> store##put (Js.string (UTF8_codec.encode new_value)) key |> ignore end;
+          | Some new_value -> store##put (Js.string (Utf8_codec.encode new_value)) key |> ignore end;
           result := Some true
         ) else (
           result := Some false
