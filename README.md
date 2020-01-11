@@ -13,6 +13,9 @@ You'll need to pin a fixed version of `irmin-git` first:
 
     opam pin add -yn irmin-git.2.0.0 https://github.com/talex5/irmin.git#2.0.0-cuekeeper
 
+Also, until https://github.com/mirage/encore/issues/13 is fixed, you'll need to link with
+[helpers.js](blob/master/test/helpers.js) to add a missing stub.
+
 You can create stores using either the standard Git format, or using Irmin's own format.
 For Git format (you'll need to add `irmin-git` as a dependency), use:
 
