@@ -36,9 +36,14 @@ let start main =
     Fmt.kstr add fmt in
 
   let expect ~fmt expected actual =
-    if expected = actual then print "Got %a, as expected" fmt expected
-    else die "Got %a, but expected %a!" fmt actual fmt expected;
-    return () in
+    if expected = actual then (
+      print "Got %a, as expected" fmt expected;
+      Lwt.return_unit
+    ) else (
+      print "Got %a, but expected %a!" fmt actual fmt expected;
+      failwith "Tests FAILED"
+    )
+  in
 
   let expect_str = expect ~fmt:Fmt.(quote string) in
   let key_list f xs =
@@ -72,12 +77,12 @@ let start main =
     Iridb_lwt.delete_database import_db_name >>= fun () ->
     Iridb_lwt.delete_database plain_db_name >>= fun () ->
 
+    let info () = Irmin.Info.v "Test message" ~date:0L ~author:"Test <example.com>" in
     begin
       let config = Irmin_IDB.config plain_db_name in
       Plain.Repo.v config >>= Plain.master >>= fun store ->
       print "Created Irmin-format basic store. Checking it is empty...";
       Plain.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
-      let info = Irmin.Info.none in
       Plain.set_exn ~info store key "value" >>= fun () ->
       print "Added test item. Reading it back...";
       Plain.get store key >>= expect_str "value" >>= fun () ->
@@ -89,6 +94,7 @@ let start main =
       | None -> assert false
       | Some head ->
       print "Head: %a" Plain.Commit.pp_hash head;
+      expect ~fmt:Fmt.(quote string) "Test message" @@ Irmin.Info.message @@ Plain.Commit.info head >>= fun () ->
       Plain.set_exn ~info store key "value3" >>= fun () ->
       Plain.history store >>= fun hist ->
       Plain.History.iter_succ (fun head ->
@@ -108,7 +114,6 @@ let start main =
       I.Repo.v config >>= I.master >>= fun store ->
       print "Created Git-format basic store. Checking it is empty...";
       I.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
-      let info = Irmin.Info.none in
       I.set_exn ~info store key "value" >>= fun () ->
       print "Added test item. Reading it back...";
       I.get store key >>= expect_str "value" >>= fun () ->
@@ -120,6 +125,7 @@ let start main =
       | None -> assert false
       | Some head ->
       print "Head: %a" I.Commit.pp_hash head;
+      expect ~fmt:Fmt.(quote string) "Test message" @@ Irmin.Info.message @@ I.Commit.info head >>= fun () ->
       I.set_exn ~info store key "value3" >>= fun () ->
       I.history store >>= fun hist ->
       I.History.iter_succ (fun head ->
