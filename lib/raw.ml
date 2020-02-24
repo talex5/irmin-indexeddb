@@ -156,6 +156,10 @@ let trans_rw t setup =
     Lwt.wakeup_exn set_r (idb_error "RW" event);
     Js._true
   );
+  trans##.onabort := Dom.handler (fun event ->
+    Lwt.wakeup_exn set_r (idb_error "RW" event);
+    Js._true
+  );
   trans##.oncomplete := Dom.handler (fun _event ->
     Lwt.wakeup set_r ();
     Js._true
