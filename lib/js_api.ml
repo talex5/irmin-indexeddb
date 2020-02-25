@@ -73,6 +73,7 @@ end
 class type transaction = object
   method oncomplete : ('self Js.t, completeEvent Js.t) Dom.event_listener Js.prop
   method onerror : ('self Js.t, request errorEvent Js.t) Dom.event_listener Js.prop
+  method onabort : ('self Js.t, request errorEvent Js.t) Dom.event_listener Js.prop
   method objectStore : store_name -> objectStore Js.t Js.meth
   method abort : unit Js.meth
 end
