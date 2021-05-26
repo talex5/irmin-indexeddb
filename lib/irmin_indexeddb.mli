@@ -7,8 +7,15 @@
 val config : string -> Irmin.config
 (** [config db_name] is a configuration that stores all values in the given IndexedDB database. *)
 
-module Content_store : Irmin.CONTENT_ADDRESSABLE_STORE_MAKER
-(** The content-addressable store stores blobs, trees and commits. *)
+module Content_store_git : Irmin.CONTENT_ADDRESSABLE_STORE_MAKER
+(** The content-addressable store stores blobs, trees and commits.
+    
+    This is for use with [Irmin_git] (it always writes boxed values with the Git header). *)
+
+module Content_store_non_git : Irmin.CONTENT_ADDRESSABLE_STORE_MAKER
+(** The content-addressable store stores blobs, trees and commits.
+
+    This is not for use with [Irmin_git], since it doesn't include the Git header. *)
 
 module Branch_store : Irmin.ATOMIC_WRITE_STORE_MAKER
 (** The branch store records the head commit hash for each branch. *)
