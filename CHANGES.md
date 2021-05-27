@@ -1,3 +1,8 @@
+## Unreleased
+
+Update to Irmin 1.6 API, which includes `clear` functions for emptying both the
+raw contents and branch stores.
+
 ## v2.0
 
 Update to Irmin 2.0 API. This way that stores are constructed has changed in Irmin 2.0.

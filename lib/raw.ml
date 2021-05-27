@@ -196,6 +196,12 @@ let remove t key =
       store##delete (Js.string key) |> ignore
     )
 
+let clear t =
+  trans_rw t
+    (fun store ->
+      store##clear () |> ignore
+    )
+
 let get t key =
   trans_ro t
     (fun store set_r ->

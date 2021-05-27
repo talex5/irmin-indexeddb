@@ -66,6 +66,7 @@ class type objectStore = object
   method add : value -> key -> request Js.t Js.meth
   method put : value -> key -> request Js.t Js.meth
   method delete : key -> request Js.t Js.meth
+  method clear : unit -> request Js.t Js.meth
   method get : key -> getRequest Js.t Js.meth
   method openCursor : openCursorRequest Js.t Js.meth
 end
