@@ -7,10 +7,10 @@
 val config : string -> Irmin.config
 (** [config db_name] is a configuration that stores all values in the given IndexedDB database. *)
 
-module Content_store : Irmin.Content_addressable.Maker
+module Content_store : Irmin.CONTENT_ADDRESSABLE_STORE_MAKER
 (** The content-addressable store stores blobs, trees and commits. *)
 
-module Branch_store : Irmin.Atomic_write.Maker
+module Branch_store : Irmin.ATOMIC_WRITE_STORE_MAKER
 (** The branch store records the head commit hash for each branch. *)
 
 exception Format_too_old of [`Irmin_0_10]
