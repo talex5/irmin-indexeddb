@@ -34,9 +34,10 @@ module Make (K : Irmin.Hash.S) (V : Irmin.Type.S) = struct
     Raw.set t (string_of_hash key) value
 
   let add t value =
-    let value = string_of_value value in
-    let k = K.hash (fun add -> add value) in
-    Raw.set t (string_of_hash k) value >|= fun () -> k
+    let pre_hash = Irmin.Type.(unstage (pre_hash V.t)) in
+    let v = string_of_value value in
+    let k = K.hash (pre_hash value) in
+    Raw.set t (string_of_hash k) v >|= fun () -> k
 
   let batch t fn = fn t
 
