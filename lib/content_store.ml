@@ -46,7 +46,7 @@ module Make (K : Irmin.Hash.S) (V : Irmin.Type.S) = struct
   let close _ = Lwt.return_unit
 
   let v config =
-    let db_name = Irmin.Private.Conf.get config Config.db_name_key in
+    let db_name = Irmin.Backend.Conf.get config Config.db_name_key in
     Config.connect db_name >|= fun idb ->
     Raw.store idb Config.ao
 end

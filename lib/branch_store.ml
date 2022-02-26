@@ -5,7 +5,7 @@ open Lwt.Infix
 open Js_of_ocaml
 
 module Make (K: Irmin.Type.S) (V: Irmin.Type.S) = struct
-  module W = Irmin.Private.Watch.Make(K)(V)
+  module W = Irmin.Backend.Watch.Make(K)(V)
 
   module Key = K
   module Val = V
@@ -30,7 +30,7 @@ module Make (K: Irmin.Type.S) (V: Irmin.Type.S) = struct
   }
 
   let v config =
-    let db_name = Irmin.Private.Conf.get config Config.db_name_key in
+    let db_name = Irmin.Backend.Conf.get config Config.db_name_key in
     Config.connect db_name >|= fun idb ->
     let prefix = db_name ^ ".rw." in
     let watch = W.v () in
