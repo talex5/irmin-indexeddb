@@ -3,4 +3,4 @@
  (modes js)
  (preprocess (pps js_of_ocaml-ppx))
  (js_of_ocaml (javascript_files helpers.js))
- (libraries checkseum.ocaml digestif.ocaml irmin_indexeddb irmin-git))
+ (libraries checkseum.ocaml unix digestif.ocaml irmin_indexeddb irmin-git))

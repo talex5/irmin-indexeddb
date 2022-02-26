@@ -5,7 +5,7 @@ open Lwt.Infix
 open Js_of_ocaml
 
 module Make (K: Irmin.Type.S) (V: Irmin.Type.S) = struct
-  module W = Irmin.Private.Watch.Make(K)(V)
+  module W = Irmin.Backend.Watch.Make(K)(V)
 
   module Key = K
   module Val = V
@@ -30,7 +30,7 @@ module Make (K: Irmin.Type.S) (V: Irmin.Type.S) = struct
   }
 
   let v config =
-    let db_name = Irmin.Private.Conf.get config Config.db_name_key in
+    let db_name = Irmin.Backend.Conf.get config Config.db_name_key in
     Config.connect db_name >|= fun idb ->
     let prefix = db_name ^ ".rw." in
     let watch = W.v () in
@@ -38,11 +38,14 @@ module Make (K: Irmin.Type.S) (V: Irmin.Type.S) = struct
     let r = Raw.store idb Config.rw in
     { watch; r; prefix; notifications; listener = None }
 
-  let string_of_hash = Irmin.Type.to_bin_string V.t
-  let hash_of_string x =
-    match Irmin.Type.of_bin_string V.t x with
-    | Ok x -> x
-    | Error (`Msg m) -> failwith m
+  let string_of_hash = Irmin.Type.(unstage (to_bin_string V.t))
+
+  let hash_of_string =
+    let value_of_string = Irmin.Type.(unstage (of_bin_string V.t)) in
+    fun x ->
+      match value_of_string x with
+      | Ok x -> x
+      | Error (`Msg m) -> failwith m
 
   let find t k =
     Raw.get t.r (string_of_key k) >|= function
@@ -124,6 +127,11 @@ module Make (K: Irmin.Type.S) (V: Irmin.Type.S) = struct
   let watch_key t key ?init cb =
     ref_listener t;
     W.watch_key t.watch key ?init cb
+
+  let clear t =
+    list t >>= fun keys ->
+    Raw.clear t.r >>= fun () ->
+    Lwt_list.iter_s (fun k -> notify t k None) keys
 
   let close _ = Lwt.return_unit
 end
