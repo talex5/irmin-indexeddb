@@ -16,13 +16,6 @@ module Plain = Irmin.Make(Irmin_indexeddb.Content_store)(Irmin_indexeddb.Branch_
 
 let key = ["key"]
 
-let make_task s =
-  let date = Unix.time () |> Int64.of_float in
-  Irmin.Info.v ~date ~author:"User" s
-
-let die fmt =
-  Fmt.kstrf failwith fmt
-
 let db_name = "Irmin_IndexedDB_test"
 let upgrade_db_name = "Irmin_IndexedDB_t2"
 let import_db_name = "Irmin_IndexedDB_t3"
@@ -50,7 +43,7 @@ let start main =
   let key_list f xs =
     let pp_item f (step, _) = Fmt.string f step in
     Fmt.pf f "[%a]"
-      (Fmt.(list ~sep:(unit ",")) pp_item) xs in
+      (Fmt.(list ~sep:(any ",")) pp_item) xs in
 
   let dump_bindings db store_name =
     let store_id = Raw.store_name store_name in
@@ -186,11 +179,11 @@ let start main =
 
       print "Importing from bundle...";
       I.Repo.import repo slice >>= function
-      | Error (`Msg m) -> die "Error importing slice: %s" m
+      | Error (`Msg m) -> Fmt.failwith "Error importing slice: %s" m
       | Ok () ->
 
       I.Head.fast_forward store head >>= function
-      | Error _ -> die "fast_forward_head failed"
+      | Error _ -> Fmt.failwith "fast_forward_head failed"
       | Ok () ->
       print "Checking import worked...";
       I.list store [] >>= expect ~fmt:key_list ["key", `Contents]
