@@ -1,3 +1,12 @@
+## dev
+
+Update to Irmin 2.3 API, which includes `clear` functions for emptying both the
+raw contents and branch stores.
+
+`Content_store` has been split into `Content_store_git` and
+`Content_store_non_git`, as we now need to know whether to add the Git header
+when writing.
+
 ## v2.0
 
 Update to Irmin 2.0 API. This way that stores are constructed has changed in Irmin 2.0.

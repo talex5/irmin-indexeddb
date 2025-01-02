@@ -9,20 +9,13 @@ This is an Irmin backend that stores the data in the web-browser's IndexedDB sto
 Instructions
 ------------
 
-You'll need to pin a fixed version of `irmin-git` first:
-
-    opam pin add -yn irmin-git.2.0.0 https://github.com/talex5/irmin.git#2.0.0-cuekeeper
-
-Also, until https://github.com/mirage/encore/issues/13 is fixed, you'll need to link with
-[helpers.js](blob/master/test/helpers.js) to add a missing stub.
-
 You can create stores using either the standard Git format, or using Irmin's own format.
 For Git format (you'll need to add `irmin-git` as a dependency), use:
 
 ```ocaml
 (* A Git-format store. This data can be exported and used with the regular Git
    tools. It can also read data produced by older versions of irmin-indexeddb. *)
-module I = Irmin_git.Generic(Irmin_indexeddb.Content_store)(Irmin_indexeddb.Branch_store)
+module I = Irmin_git.Generic(Irmin_indexeddb.Content_store_git)(Irmin_indexeddb.Branch_store)
     (Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)
 ```
 
@@ -32,19 +25,18 @@ For Irmin format, use:
 (* An Irmin-format store. This allows storing custom metadata or using
    different hash functions, but is not compatible with the Git tools or with
    databases created by older versions of irmin-indexeddb. *)
-module I = Irmin.Make(Irmin_indexeddb.Content_store)(Irmin_indexeddb.Branch_store)
-    (Irmin.Metadata.None)(Irmin.Contents.String)
-    (Irmin.Path.String_list)(Irmin.Branch.String)(Irmin.Hash.SHA256)
+module I = Irmin.Make(Irmin_indexeddb.Content_store_non_git)(Irmin_indexeddb.Branch_store)
+    (Irmin.Metadata.None)(Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)(Irmin.Hash.SHA256)
 ```
 
 To create a store, use e.g.
 
     let () =
-      let config = Irmin_IDB.config "MyProg" in
+      let config = Irmin_indexeddb.config "MyProg" in
       I.v config make_task >>= fun store ->
       ...
 
-The argument to `Irmin_IDB.config` is the name of the database to use (default "Irmin").
+The argument to `Irmin_indexeddb.config` is the name of the database to use.
 
 Note: In order to provide notifications (to instances running in other tabs),
 the backend will also write the current branch head hash into HTML local
@@ -69,4 +61,4 @@ Conditions
 See [LICENSE.md](LICENSE.md).
 
 
-[mirage]: http://openmirage.org/
+[mirage]: https://mirage.io

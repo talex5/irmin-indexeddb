@@ -5,16 +5,26 @@ module Raw = Irmin_indexeddb.Raw
 
 (* A Git-format store. This data can be exported and used with the regular Git
    tools. It can also read data produced by older versions of irmin-indexeddb. *)
-module I = Irmin_git.Generic(Irmin_indexeddb.Content_store)(Irmin_indexeddb.Branch_store)
+module I = Irmin_git.Generic(Irmin_indexeddb.Content_store_git)(Irmin_indexeddb.Branch_store)
     (Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)
 
 (* An Irmin-format store. This allows storing custom metadata or using
    different hash functions, but is not compatible with the Git tools or with
    databases created by older versions of irmin-indexeddb. *)
-module Plain = Irmin.Make(Irmin_indexeddb.Content_store)(Irmin_indexeddb.Branch_store)
+module Plain = Irmin.Make(Irmin_indexeddb.Content_store_non_git)(Irmin_indexeddb.Branch_store)
     (Irmin.Metadata.None)(Irmin.Contents.String)(Irmin.Path.String_list)(Irmin.Branch.String)(Irmin.Hash.SHA256)
 
 let key = ["key"]
+
+let keys_of_store (type t) (module Store : Irmin.KV with type t = t) (t : t) =
+  Store.list t []
+  >|= List.map (fun (k, subtree) ->
+      let kind =
+        match Store.Tree.destruct subtree with
+        | `Node _ -> `Node
+        | `Contents _ -> `Contents
+      in
+      (k, kind))
 
 let db_name = "Irmin_IndexedDB_test"
 let upgrade_db_name = "Irmin_IndexedDB_t2"
@@ -76,13 +86,13 @@ let start main =
       let config = Irmin_indexeddb.config plain_db_name in
       Plain.Repo.v config >>= Plain.master >>= fun store ->
       print "Created Irmin-format basic store. Checking it is empty...";
-      Plain.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
+      keys_of_store (module Plain) store >>= expect ~fmt:key_list [] >>= fun () ->
       Plain.set_exn ~info store key "value" >>= fun () ->
       print "Added test item. Reading it back...";
       Plain.get store key >>= expect_str "value" >>= fun () ->
 
       print "Listing contents...";
-      Plain.list store [] >>= expect ~fmt:key_list ["key", `Contents] >>= fun () ->
+      keys_of_store (module Plain) store >>= expect ~fmt:key_list ["key", `Contents] >>= fun () ->
 
       Plain.Head.find store >>= function
       | None -> assert false
@@ -107,13 +117,13 @@ let start main =
       let config = Irmin_indexeddb.config db_name in
       I.Repo.v config >>= I.master >>= fun store ->
       print "Created Git-format basic store. Checking it is empty...";
-      I.list store [] >>= expect ~fmt:key_list [] >>= fun () ->
+      keys_of_store (module I) store >>= expect ~fmt:key_list [] >>= fun () ->
       I.set_exn ~info store key "value" >>= fun () ->
       print "Added test item. Reading it back...";
       I.get store key >>= expect_str "value" >>= fun () ->
 
       print "Listing contents...";
-      I.list store [] >>= expect ~fmt:key_list ["key", `Contents] >>= fun () ->
+      keys_of_store (module I) store >>= expect ~fmt:key_list ["key", `Contents] >>= fun () ->
 
       I.Head.find store >>= function
       | None -> assert false
@@ -186,7 +196,7 @@ let start main =
       | Error _ -> Fmt.failwith "fast_forward_head failed"
       | Ok () ->
       print "Checking import worked...";
-      I.list store [] >>= expect ~fmt:key_list ["key", `Contents]
+      keys_of_store (module I) store >>= expect ~fmt:key_list ["key", `Contents]
     end >>= fun () ->
 
     print "Success!";
